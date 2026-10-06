@@ -1,87 +1,44 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Real-time crypto arbitrage opportunities between Binance and MEXC">
-    <title>Crypto Arbitrage Detector | Live Opportunities</title>
+    <meta name="description" content="Arbitraje crypto en vivo entre Binance y MEXC">
+    <title>Crypto Arbitrage Detector | Live</title>
     <link rel="stylesheet" href="style.css">
+    <style>.watch{background:#1a1f2e;border:1px solid #374151;border-radius:1rem;padding:1.25rem;margin-bottom:2rem}.pair-chip{display:inline-block;background:#242b3d;border:1px solid #374151;border-radius:.5rem;padding:.2rem .6rem;margin:.2rem;font-size:.85rem}.cfg{color:#9ca3af;font-size:.85rem;margin-top:.75rem}.alert-card a{color:#3b82f6;font-size:.8rem;text-decoration:none}</style>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <h1 class="title">
-                    <span class="icon">ðŸ“Š</span>
-                    Crypto Arbitrage Detector
-                </h1>
-                <p class="subtitle">Real-time opportunities between Binance and MEXC</p>
+                <h1 class="title"><span class="icon">📊</span>Crypto Arbitrage Detector</h1>
+                <p class="subtitle">Solo detección entre <b>Binance</b> ↔ <b>MEXC</b> (spot). No ejecuta trades.</p>
             </div>
             <div class="status">
-                <div class="status-indicator">
-                    <span class="status-dot" id="statusDot"></span>
-                    <span class="status-text" id="statusText">Connecting...</span>
-                </div>
-                <div class="last-update">
-                    Last update: <span id="lastUpdate">â€”</span>
-                </div>
+                <div class="status-indicator"><span class="status-dot" id="statusDot"></span><span class="status-text" id="statusText">Conectando...</span></div>
+                <div class="last-update">Última lectura: <span id="lastUpdate">—</span></div>
             </div>
         </header>
-
-        <!-- Stats Summary -->
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-label">Active Opportunities</div>
-                <div class="stat-value" id="activeCount">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Best Spread</div>
-                <div class="stat-value" id="bestSpread">â€”</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Top Profit</div>
-                <div class="stat-value" id="topProfit">â€”</div>
-            </div>
+        <div class="watch">
+            <b>👁️ Vigilando 15 activos:</b>
+            <div id="watchList" style="margin-top:.5rem"></div>
+            <div class="cfg" id="cfgLine"></div>
+            <div class="cfg">Fuente: <a href="https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/alerts.json" target="_blank" style="color:#3b82f6">data/alerts.json en GitHub</a> · <a href="https://github.com/jarmy90/crypto-arb-alerts" target="_blank" style="color:#3b82f6">repo</a></div>
         </div>
-
-        <!-- Alerts Grid -->
+        <div class="stats">
+            <div class="stat-card"><div class="stat-label">Alertas</div><div class="stat-value" id="activeCount">0</div></div>
+            <div class="stat-card"><div class="stat-label">Mejor spread neto</div><div class="stat-value" id="bestSpread">—</div></div>
+            <div class="stat-card"><div class="stat-label">Top profit</div><div class="stat-value" id="topProfit">—</div></div>
+        </div>
         <main class="alerts-section">
-            <div class="section-header">
-                <h2>Live Opportunities</h2>
-                <button class="refresh-btn" id="refreshBtn" title="Refresh now">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-                    </svg>
-                </button>
-            </div>
-            
-            <div id="alertsContainer" class="alerts-grid">
-                <!-- Alerts will be inserted here dynamically -->
-            </div>
-
-            <!-- Empty state -->
-            <div id="emptyState" class="empty-state" style="display: none;">
-                <div class="empty-icon">ðŸ”</div>
-                <h3>No Opportunities Right Now</h3>
-                <p>The bot is actively scanning the markets. Check back soon!</p>
-            </div>
-
-            <!-- Error state -->
-            <div id="errorState" class="error-state" style="display: none;">
-                <div class="error-icon">âš ï¸</div>
-                <h3>Unable to Load Data</h3>
-                <p id="errorMessage">Please check your connection and try again.</p>
-            </div>
+            <div class="section-header"><h2>Oportunidades en vivo</h2><button class="refresh-btn" id="refreshBtn" title="Actualizar">↻</button></div>
+            <div id="alertsContainer" class="alerts-grid"></div>
+            <div id="emptyState" class="empty-state" style="display:none"><div class="empty-icon">🔍</div><h3>Sin spread ahora mismo</h3><p>Escaneando...</p></div>
+            <div id="errorState" class="error-state" style="display:none"><div class="error-icon">⚠️</div><h3>Sin conexión</h3><p id="errorMessage"></p></div>
         </main>
-
-        <!-- Footer -->
-        <footer class="footer">
-            <p>âš ï¸ <strong>Disclaimer:</strong> This is a detection tool only. Not financial advice. Trading involves risk.</p>
-            <p>Data refreshes every 12 seconds | Spread calculated after fees</p>
-        </footer>
+        <footer class="footer"><p>⚠️ Solo detección, no es consejo financiero.</p><p>Neto = (bid vendo − ask compro)/ask×100 − fees · refresh 12s</p></footer>
     </div>
-
     <script src="app.js"></script>
 </body>
 </html>
