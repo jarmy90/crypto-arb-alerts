@@ -15,7 +15,8 @@ const elements = {
   statusText: document.getElementById('statusText'), lastUpdate: document.getElementById('lastUpdate'),
   refreshBtn: document.getElementById('refreshBtn'), activeCount: document.getElementById('activeCount'),
   bestSpread: document.getElementById('bestSpread'), topProfit: document.getElementById('topProfit'),
-  watchList: document.getElementById('watchList'), cfgLine: document.getElementById('cfgLine')
+  watchList: document.getElementById('watchList'), cfgLine: document.getElementById('cfgLine'),
+  liveBox: document.getElementById('liveBox'), liveTime: document.getElementById('liveTime')
 };
 
 function normalizeAlerts(j) {
@@ -80,6 +81,27 @@ async function fetchAlerts(){
   }catch(e){ console.error(e); if(lastOk){ updateStatus('active','Conectado · esperando datos…'); } else showError(`No pude cargar alerts.json: ${e.message}. Revisa https://github.com/jarmy90/crypto-arb-alerts`); }
   finally{ isLoading=false; }
 }
-elements.refreshBtn.addEventListener('click',fetchAlerts);
-function init(){ renderWatch(); fetchAlerts(); setInterval(fetchAlerts,CONFIG.refreshInterval); setInterval(()=>{ if(lastFetchTime) elements.lastUpdate.textContent=`${lastFetchTime.toLocaleTimeString()} · auto-refresh 12s`; },5000); }
+elements.refreshBtn.addEventListener('click',()=>{fetchAlerts();fetchLive();});
+async function fetchLive(){
+  try{
+    const syms=['BTCUSDT','ETHUSDT','SOLUSDT'];
+    let html='';
+    for(const s of syms){
+      const pretty=s.replace('USDT','/USDT');
+      let b=null,m=null;
+      try{ b=await (await fetch(`https://api.binance.com/api/v3/ticker/bookTicker?symbol=${s}`)).json(); }catch(e){}
+      try{ m=await (await fetch(`https://api.mexc.com/api/v3/ticker/bookTicker?symbol=${s}`)).json(); }catch(e){}
+      if(!b||!m){ html+=`<div>${pretty}: error live</div>`; continue; }
+      const bA=parseFloat(b.askPrice),mB=parseFloat(m.bidPrice),mA=parseFloat(m.askPrice),bB=parseFloat(b.bidPrice);
+      const n1=((mB-bA)/bA*100)-WATCH.feeBinance-WATCH.feeMexc;
+      const n2=((bB-mA)/mA*100)-WATCH.feeBinance-WATCH.feeMexc;
+      const best=Math.max(n1,n2);
+      const ok=best>=WATCH.minNet;
+      html+=`<div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid #374151"><span><b>${pretty}</b> Bin <b>${Number(bB).toFixed(2)}</b> / Mex <b>${Number(mB).toFixed(2)}</b></span><span style="color:${ok?'#10b981':'#9ca3af'}">${ok?'🟢 ARB '+best.toFixed(2)+'%':'⚪ '+best.toFixed(2)+'% neto'}</span></div>`;
+    }
+    if(elements.liveBox) elements.liveBox.innerHTML=html;
+    if(elements.liveTime) elements.liveTime.textContent=new Date().toLocaleTimeString();
+  }catch(e){}
+}
+function init(){ renderWatch(); fetchAlerts(); fetchLive(); setInterval(fetchAlerts,CONFIG.refreshInterval); setInterval(fetchLive,15000); setInterval(()=>{ if(lastFetchTime) elements.lastUpdate.textContent=`${lastFetchTime.toLocaleTimeString()} · auto-refresh 12s`; },5000); }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
