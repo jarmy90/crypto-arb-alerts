@@ -69,8 +69,8 @@ do {
   $n++
   Write-Host ""
   Write-Host "--- Scan #$n $([DateTime]::UtcNow.ToString('HH:mm:ss')) UTC ---"
+  $live=@()
   foreach ($sym in $SYMS) {
-    if ($lastAlert.ContainsKey($sym) -and ((Get-Date) - $lastAlert[$sym]).TotalSeconds -lt $COOL) { continue }
     $p = Get-Prices $sym
     if (-not $p.B -or -not $p.M) { continue }
     $bAsk=[double]$p.B.askPrice; $bBid=[double]$p.B.bidPrice
@@ -81,6 +81,8 @@ do {
     # Dir2: compra MEXC, vende Binance
     $g2 = ($bBid - $mAsk)/$mAsk*100; $n2 = $g2 - $FEE_M - $FEE_B
     $best = [Math]::Max($n1,$n2)
+    $live += [ordered]@{symbol=$sym; binance_bid=$bBid; binance_ask=$bAsk; mexc_bid=$mBid; mexc_ask=$mAsk; net1=[Math]::Round($n1,4); net2=[Math]::Round($n2,4); best=[Math]::Round($best,4)}
+    if ($lastAlert.ContainsKey($sym) -and ((Get-Date) - $lastAlert[$sym]).TotalSeconds -lt $COOL) { continue }
     if ($best -ge $MIN) {
       if ($n1 -ge $n2) { $bx="BINANCE"; $sx="MEXC"; $bp=$bAsk; $sp=$mBid; $g=$g1; $nn=$n1; $fb=$FEE_B; $fs=$FEE_M }
       else { $bx="MEXC"; $sx="BINANCE"; $bp=$mAsk; $sp=$bBid; $g=$g2; $nn=$n2; $fb=$FEE_M; $fs=$FEE_B }
@@ -99,6 +101,18 @@ do {
       if (Push-Alert $alert) { Write-Host "  Publicado en GitHub" -ForegroundColor Cyan; $lastAlert[$sym]=Get-Date } else { Write-Host "  Fallo al publicar" -ForegroundColor Red }
     }
   }
+  $liveObj = @{ updated=([DateTime]::UtcNow.ToString("o")); symbols=$live }
+  $liveObj | ConvertTo-Json -Depth 5 | Set-Content "data/live.json" -Encoding UTF8
+  try {
+    $lj = Get-Content "data/live.json" -Raw -Encoding UTF8
+    $lb64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($lj))
+    $lurl = "https://api.github.com/repos/$REPO/contents/data/live.json"
+    $lsha = $null; try { $lsha = (Invoke-RestMethod -Uri "$lurl`?ref=main" -Headers $H -TimeoutSec 10).sha } catch {}
+    $lbody = @{ message = "Update live - $([DateTime]::UtcNow.ToString('yyyy-MM-dd HH:mm:ss')) UTC"; content = $lb64; branch = "main" }
+    if ($lsha) { $lbody.sha = $lsha }
+    Invoke-RestMethod -Uri $lurl -Method Put -Headers $H -Body ($lbody | ConvertTo-Json -Depth 5) -ContentType "application/json" -TimeoutSec 15 | Out-Null
+    Write-Host "Live publicado ($($live.Count) pares)"
+  } catch { Write-Host "  Live push error: $($_.Exception.Message)" -ForegroundColor Yellow }
   Write-Host "Fin scan #$n. Proximo en ${WAIT}s..."
   if ($Once) { break }
   Start-Sleep -Seconds $WAIT
