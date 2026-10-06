@@ -1,8 +1,8 @@
-{
+[{
     "symbol":  "BTC/USDT",
     "pair_urls":  {
-                      "sell":  "https://www.mexc.com/exchange/BTCUSDT",
-                      "buy":  "https://www.binance.com/en/trade/BTCUSDT"
+                      "sell":  "https://www.mexc.com/exchange/BTC_USDT",
+                      "buy":  "https://www.binance.com/en/trade/BTC_USDT?type=spot"
                   },
     "sell_price":  86747.579999999987,
     "gross_spread":  0.5,
@@ -12,4 +12,4 @@
     "buy_price":  86316,
     "sell_exchange":  "MEXC",
     "estimated_profit":  2.25
-}
+}]
