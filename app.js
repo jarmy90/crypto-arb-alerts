@@ -40,10 +40,19 @@ function renderWatch(){
   if(elements.watchList) elements.watchList.innerHTML = WATCH.symbols.map(s=>`<span class="pair-chip">${s}</span>`).join('');
   if(elements.cfgLine) elements.cfgLine.textContent = `Exchanges: ${WATCH.exchanges.join(' ↔ ')} | Umbral neto ≥ ${WATCH.minNet}% | Trade ${WATCH.tradeSize} USDT | Fees Binance ${WATCH.feeBinance}% / MEXC ${WATCH.feeMexc}% | Escaneo cada 8s`;
 }
+function pairLinks(a){
+  const uf=(a.symbol||'BTC/USDT').replace('/','_');
+  const bOk=(a.pair_urls&&a.pair_urls.buy)||'';
+  const sOk=(a.pair_urls&&a.pair_urls.sell)||'';
+  const buy=(a.buy_exchange==='BINANCE')?`https://www.binance.com/en/trade/${uf}?type=spot`:`https://www.mexc.com/exchange/${uf}`;
+  const sell=(a.sell_exchange==='BINANCE')?`https://www.binance.com/en/trade/${uf}?type=spot`:`https://www.mexc.com/exchange/${uf}`;
+  // corrige formato viejo sin guion bajo (BTCUSDT → BTC_USDT)
+  return { buy: bOk.includes('BTCUSDT')||bOk.includes('/BTC')&&!bOk.includes('_') ? buy : (bOk||buy), sell: sOk.includes('BTCUSDT')||sOk.includes('/BTC')&&!sOk.includes('_') ? sell : (sOk||sell), _buy: buy, _sell: sell };
+}
 function createAlertCard(a){
   const d=document.createElement('div'); d.className='alert-card';
   if(!isRecentAlert(a.timestamp)) d.style.opacity='0.6';
-  const buyUrl=(a.pair_urls&&a.pair_urls.buy)||'#', sellUrl=(a.pair_urls&&a.pair_urls.sell)||'#';
+  const L=pairLinks(a); const buyUrl=L.buy||L._buy, sellUrl=L.sell||L._sell;
   d.innerHTML=`<div class="alert-header"><div class="symbol">${a.symbol||'?'}</div><div class="spread-badge">+${Number(a.net_spread||0).toFixed(2)}%</div></div>
   <div class="direction"><div class="exchange-flow"><span>Compra</span><span class="exchange-name">${a.buy_exchange||''}</span><span class="arrow">→</span><span>Vende</span><span class="exchange-name">${a.sell_exchange||''}</span></div></div>
   <div class="prices"><div class="price-item"><div class="price-label">Compra</div><div class="price-value">$${formatPrice(Number(a.buy_price||0))}</div><a href="${buyUrl}" target="_blank" rel="noopener">Abrir ${a.buy_exchange||''} ↗</a></div>
