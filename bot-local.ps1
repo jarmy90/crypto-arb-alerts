@@ -20,6 +20,7 @@ function Save-Local($a){
 $n=0
 do{
   $n++; Write-Host "`n--- Scan #$n $([DateTime]::UtcNow.ToString('HH:mm:ss')) UTC ---"
+  $live=@()
   foreach($sym in $SYMS){
     if($last.ContainsKey($sym) -and ((Get-Date)-$last[$sym]).TotalSeconds -lt $COOL){continue}
     $s=$sym.Replace("/",""); $b=$null; $m=$null
@@ -30,6 +31,7 @@ do{
     if($bA -le 0 -or $mA -le 0){continue}
     $n1=(($mB-$bA)/$bA*100)-$FB-$FM; $n2=(($bB-$mA)/$mA*100)-$FM-$FB
     $best=[Math]::Max($n1,$n2)
+    $live+= [ordered]@{symbol=$sym; binance_bid=$bB; binance_ask=$bA; mexc_bid=$mB; mexc_ask=$mA; net1=[Math]::Round($n1,4); net2=[Math]::Round($n2,4); best=[Math]::Round($best,4)}
     if($best -ge $MIN){
       if($n1 -ge $n2){$bx="BINANCE";$sx="MEXC";$bp=$bA;$sp=$mB;$g=(($mB-$bA)/$bA*100);$nn=$n1;$fb=$FB;$fs=$FM}
       else{$bx="MEXC";$sx="BINANCE";$bp=$mA;$sp=$bB;$g=(($bB-$mA)/$mA*100);$nn=$n2;$fb=$FM;$fs=$FB}
@@ -43,6 +45,7 @@ do{
     }
   }
   Write-Host "Fin scan #$n. Guardado en data/alerts.json"
+  @{ updated=([DateTime]::UtcNow.ToString("o")); symbols=$live } | ConvertTo-Json -Depth 5 | Set-Content "data/live.json" -Encoding UTF8
   if($Once){break}
   Start-Sleep -Seconds $WAIT
 }while($true)
