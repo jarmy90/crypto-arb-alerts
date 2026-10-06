@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Real-time crypto arbitrage opportunities between Binance and MEXC">
+    <title>Crypto Arbitrage Detector | Live Opportunities</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="title">
+                    <span class="icon">ðŸ“Š</span>
+                    Crypto Arbitrage Detector
+                </h1>
+                <p class="subtitle">Real-time opportunities between Binance and MEXC</p>
+            </div>
+            <div class="status">
+                <div class="status-indicator">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span class="status-text" id="statusText">Connecting...</span>
+                </div>
+                <div class="last-update">
+                    Last update: <span id="lastUpdate">â€”</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Stats Summary -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">Active Opportunities</div>
+                <div class="stat-value" id="activeCount">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Best Spread</div>
+                <div class="stat-value" id="bestSpread">â€”</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Top Profit</div>
+                <div class="stat-value" id="topProfit">â€”</div>
+            </div>
+        </div>
+
+        <!-- Alerts Grid -->
+        <main class="alerts-section">
+            <div class="section-header">
+                <h2>Live Opportunities</h2>
+                <button class="refresh-btn" id="refreshBtn" title="Refresh now">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div id="alertsContainer" class="alerts-grid">
+                <!-- Alerts will be inserted here dynamically -->
+            </div>
+
+            <!-- Empty state -->
+            <div id="emptyState" class="empty-state" style="display: none;">
+                <div class="empty-icon">ðŸ”</div>
+                <h3>No Opportunities Right Now</h3>
+                <p>The bot is actively scanning the markets. Check back soon!</p>
+            </div>
+
+            <!-- Error state -->
+            <div id="errorState" class="error-state" style="display: none;">
+                <div class="error-icon">âš ï¸</div>
+                <h3>Unable to Load Data</h3>
+                <p id="errorMessage">Please check your connection and try again.</p>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>âš ï¸ <strong>Disclaimer:</strong> This is a detection tool only. Not financial advice. Trading involves risk.</p>
+            <p>Data refreshes every 12 seconds | Spread calculated after fees</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
