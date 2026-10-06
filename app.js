@@ -82,26 +82,22 @@ async function fetchAlerts(){
   finally{ isLoading=false; }
 }
 elements.refreshBtn.addEventListener('click',()=>{fetchAlerts();fetchLive();});
+const LIVE_URL = 'https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/live.json';
 async function fetchLive(){
   try{
-    const syms=['BTCUSDT','ETHUSDT','SOLUSDT'];
+    const r=await fetch(`${LIVE_URL}?t=${Date.now()}`,{cache:'no-store'});
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j=await r.json();
+    const rows=j.symbols||j||[];
+    const show=rows.slice(0,8);
     let html='';
-    for(const s of syms){
-      const pretty=s.replace('USDT','/USDT');
-      let b=null,m=null;
-      try{ b=await (await fetch(`https://api.binance.com/api/v3/ticker/bookTicker?symbol=${s}`)).json(); }catch(e){}
-      try{ m=await (await fetch(`https://api.mexc.com/api/v3/ticker/bookTicker?symbol=${s}`)).json(); }catch(e){}
-      if(!b||!m){ html+=`<div>${pretty}: error live</div>`; continue; }
-      const bA=parseFloat(b.askPrice),mB=parseFloat(m.bidPrice),mA=parseFloat(m.askPrice),bB=parseFloat(b.bidPrice);
-      const n1=((mB-bA)/bA*100)-WATCH.feeBinance-WATCH.feeMexc;
-      const n2=((bB-mA)/mA*100)-WATCH.feeBinance-WATCH.feeMexc;
-      const best=Math.max(n1,n2);
-      const ok=best>=WATCH.minNet;
-      html+=`<div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid #374151"><span><b>${pretty}</b> Bin <b>${Number(bB).toFixed(2)}</b> / Mex <b>${Number(mB).toFixed(2)}</b></span><span style="color:${ok?'#10b981':'#9ca3af'}">${ok?'🟢 ARB '+best.toFixed(2)+'%':'⚪ '+best.toFixed(2)+'% neto'}</span></div>`;
+    for(const s of show){
+      const ok=s.best>=WATCH.minNet;
+      html+=`<div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid #374151"><span><b>${s.symbol}</b> Bin <b>${Number(s.binance_bid).toFixed(2)}</b> / Mex <b>${Number(s.mexc_bid).toFixed(2)}</b></span><span style="color:${ok?'#10b981':'#9ca3af'}">${ok?'🟢 ARB '+Number(s.best).toFixed(2)+'%':'⚪ '+Number(s.best).toFixed(2)+'% neto'}</span></div>`;
     }
-    if(elements.liveBox) elements.liveBox.innerHTML=html;
-    if(elements.liveTime) elements.liveTime.textContent=new Date().toLocaleTimeString();
-  }catch(e){}
+    if(elements.liveBox) elements.liveBox.innerHTML=html||'sin datos';
+    if(elements.liveTime) elements.liveTime.textContent=new Date(j.updated||Date.now()).toLocaleTimeString()+` (${formatTimeAgo(j.updated||Date.now())})`;
+  }catch(e){ if(elements.liveBox) elements.liveBox.innerHTML=`live aún no publicado por el bot — corre <b>.\\bot.ps1</b> para generarlo. (${e.message})`; }
 }
 function init(){ renderWatch(); fetchAlerts(); fetchLive(); setInterval(fetchAlerts,CONFIG.refreshInterval); setInterval(fetchLive,15000); setInterval(()=>{ if(lastFetchTime) elements.lastUpdate.textContent=`${lastFetchTime.toLocaleTimeString()} · auto-refresh 12s`; },5000); }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
