@@ -1,0 +1,155 @@
+{
+    "symbols":  [
+                    {
+                        "symbol":  "BTC/USDT",
+                        "binance_bid":  86228,
+                        "binance_ask":  86228.01,
+                        "mexc_bid":  86216.53,
+                        "mexc_ask":  86216.54,
+                        "net1":  -0.1633,
+                        "net2":  -0.1367,
+                        "best":  -0.1367
+                    },
+                    {
+                        "symbol":  "ETH/USDT",
+                        "binance_bid":  2714.52,
+                        "binance_ask":  2714.53,
+                        "mexc_bid":  2714.57,
+                        "mexc_ask":  2714.6,
+                        "net1":  -0.1485,
+                        "net2":  -0.1529,
+                        "best":  -0.1485
+                    },
+                    {
+                        "symbol":  "BNB/USDT",
+                        "binance_bid":  784.89,
+                        "binance_ask":  784.9,
+                        "mexc_bid":  784.84,
+                        "mexc_ask":  785.03,
+                        "net1":  -0.1576,
+                        "net2":  -0.1678,
+                        "best":  -0.1576
+                    },
+                    {
+                        "symbol":  "SOL/USDT",
+                        "binance_bid":  120.35,
+                        "binance_ask":  120.36,
+                        "mexc_bid":  120.35,
+                        "mexc_ask":  120.36,
+                        "net1":  -0.1583,
+                        "net2":  -0.1583,
+                        "best":  -0.1583
+                    },
+                    {
+                        "symbol":  "XRP/USDT",
+                        "binance_bid":  1.5099,
+                        "binance_ask":  1.51,
+                        "mexc_bid":  1.5098,
+                        "mexc_ask":  1.5099,
+                        "net1":  -0.1632,
+                        "net2":  -0.15,
+                        "best":  -0.15
+                    },
+                    {
+                        "symbol":  "ADA/USDT",
+                        "binance_bid":  0.2775,
+                        "binance_ask":  0.2776,
+                        "mexc_bid":  0.2775,
+                        "mexc_ask":  0.2776,
+                        "net1":  -0.186,
+                        "net2":  -0.186,
+                        "best":  -0.186
+                    },
+                    {
+                        "symbol":  "DOGE/USDT",
+                        "binance_bid":  0.09547,
+                        "binance_ask":  0.09548,
+                        "mexc_bid":  0.09547,
+                        "mexc_ask":  0.09548,
+                        "net1":  -0.1605,
+                        "net2":  -0.1605,
+                        "best":  -0.1605
+                    },
+                    {
+                        "symbol":  "DOT/USDT",
+                        "binance_bid":  1.218,
+                        "binance_ask":  1.219,
+                        "mexc_bid":  1.217,
+                        "mexc_ask":  1.2179,
+                        "net1":  -0.3141,
+                        "net2":  -0.1418,
+                        "best":  -0.1418
+                    },
+                    {
+                        "symbol":  "POL/USDT",
+                        "binance_bid":  0.10839,
+                        "binance_ask":  0.1084,
+                        "mexc_bid":  0.10837,
+                        "mexc_ask":  0.10841,
+                        "net1":  -0.1777,
+                        "net2":  -0.1684,
+                        "best":  -0.1684
+                    },
+                    {
+                        "symbol":  "LTC/USDT",
+                        "binance_bid":  70.21,
+                        "binance_ask":  70.22,
+                        "mexc_bid":  70.2,
+                        "mexc_ask":  70.22,
+                        "net1":  -0.1785,
+                        "net2":  -0.1642,
+                        "best":  -0.1642
+                    },
+                    {
+                        "symbol":  "AVAX/USDT",
+                        "binance_bid":  11.484,
+                        "binance_ask":  11.485,
+                        "mexc_bid":  11.481,
+                        "mexc_ask":  11.486,
+                        "net1":  -0.1848,
+                        "net2":  -0.1674,
+                        "best":  -0.1674
+                    },
+                    {
+                        "symbol":  "LINK/USDT",
+                        "binance_bid":  13.999,
+                        "binance_ask":  14,
+                        "mexc_bid":  13.995,
+                        "mexc_ask":  13.998,
+                        "net1":  -0.1857,
+                        "net2":  -0.1429,
+                        "best":  -0.1429
+                    },
+                    {
+                        "symbol":  "UNI/USDT",
+                        "binance_bid":  8.88,
+                        "binance_ask":  8.881,
+                        "mexc_bid":  8.879,
+                        "mexc_ask":  8.882,
+                        "net1":  -0.1725,
+                        "net2":  -0.1725,
+                        "best":  -0.1725
+                    },
+                    {
+                        "symbol":  "ATOM/USDT",
+                        "binance_bid":  1.792,
+                        "binance_ask":  1.794,
+                        "mexc_bid":  1.792,
+                        "mexc_ask":  1.794,
+                        "net1":  -0.2615,
+                        "net2":  -0.2615,
+                        "best":  -0.2615
+                    },
+                    {
+                        "symbol":  "NEAR/USDT",
+                        "binance_bid":  5.166,
+                        "binance_ask":  5.167,
+                        "mexc_bid":  5.164,
+                        "mexc_ask":  5.1652,
+                        "net1":  -0.2081,
+                        "net2":  -0.1345,
+                        "best":  -0.1345
+                    }
+                ],
+    "updated":  "2026-10-06T12:46:21.5568585Z"
+}
