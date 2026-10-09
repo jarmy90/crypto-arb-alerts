@@ -15,6 +15,19 @@ $SAFE=[double](Get-Cfg $map "SAFETY_MARGIN" "0.05")
 $EXITMIN=[double](Get-Cfg $map "EXIT_MIN_USDT" "500")
 $PERSIST=[int](Get-Cfg $map "PERSIST_READS" "2")
 $MAXAGE=[int](Get-Cfg $map "MAX_DATA_AGE_S" "90")
+$LAT=[double](Get-Cfg $map "LATENCY_RISK" "0.05")
+$PRISK=[double](Get-Cfg $map "PARTIAL_FILL_RISK" "0.05")
+$EVOLK=[double](Get-Cfg $map "EXITVOL_K" "1.0")
+$SIZES=((Get-Cfg $map "TRADE_SIZES" "25,50,100,250,500,1000").Split(",") | ForEach-Object { [double]$_.Trim() })
+$PRESIG_MS=[int](Get-Cfg $map "PRE_SIGNAL_MIN_MS" "2000")
+$PREP_MS=[int](Get-Cfg $map "PREPARE_MIN_MS" "4000")
+$GAP_MS=[int](Get-Cfg $map "MAX_SIGNAL_GAP_MS" "1000")
+$GAPSCAN_S=[int](Get-Cfg $map "MAX_SIGNAL_GAP_S" "300")
+$NEAR=[double](Get-Cfg $map "NEAR_BAND" "0.10")
+$QMAXAGE_MS=[int](Get-Cfg $map "DATA_MAX_AGE_MS" "2000")
+$SYNCMAX_MS=[int](Get-Cfg $map "SYNC_MAX_AGE_MS" "1500")
+$TFB=[double](Get-Cfg $map "FEE_TAKER_BINANCE" ([string]$FB)); $TFM=[double](Get-Cfg $map "FEE_TAKER_MEXC" ([string]$FM)); $TFY=[double](Get-Cfg $map "FEE_TAKER_BYBIT" ([string]$FY)); $TFO=[double](Get-Cfg $map "FEE_TAKER_OKX" ([string]$FO))
+$FVB=[int](Get-Cfg $map "FEE_VERIFIED_BINANCE" "0"); $FVM=[int](Get-Cfg $map "FEE_VERIFIED_MEXC" "0"); $FVY=[int](Get-Cfg $map "FEE_VERIFIED_BYBIT" "0"); $FVO=[int](Get-Cfg $map "FEE_VERIFIED_OKX" "0")
 $lastDepth=[DateTime]::MinValue
 $hist=@{}
 . (Join-Path $PSScriptRoot "depth-common.ps1")
@@ -60,7 +73,7 @@ do{
   $sw=[Diagnostics.Stopwatch]::StartNew()
   Write-Host "`n--- Ciclo $script:cycleId $([DateTime]::UtcNow.ToString('HH:mm:ss')) UTC ---"
   if($script:markets -eq $null -or ((Get-Date)-$script:marketsTs).TotalHours -ge 6){ Update-Markets $false }
-  $fees=@{BINANCE=$FB;MEXC=$FM;BYBIT=$FY;OKX=$FO}
+  $fees=@{BINANCE=$TFB;MEXC=$TFM;BYBIT=$TFY;OKX=$TFO}
   $live=@()
   foreach($grp in $script:markets.groups){
     $sym=$grp.normalized
@@ -95,7 +108,7 @@ do{
   $script:tickerTs=([DateTime]::UtcNow.ToString("o"))
   if(((Get-Date)-$lastDepth).TotalSeconds -ge $DINT){
     $lastDepth=Get-Date; $depth=@(); $books=@()
-    $cfg=@{MIN=$MIN; SIZE=$SIZE; THIN=$THIN; SAFE=$SAFE; EXITMIN=$EXITMIN; PERSIST=$PERSIST; MF=@{BINANCE=$MFB;MEXC=$MFM;BYBIT=$MFY;OKX=$MFO}; TF=@{BINANCE=$FB;MEXC=$FM;BYBIT=$FY;OKX=$FO}}
+    $cfg=@{MIN=$MIN; SIZE=$SIZE; THIN=$THIN; SAFE=$SAFE; EXITMIN=$EXITMIN; PERSIST=$PERSIST; LAT=$LAT; PRISK=$PRISK; EVOLK=$EVOLK; SIZES=$SIZES; PRESIG_MS=$PRESIG_MS; PREP_MS=$PREP_MS; GAP_MS=$GAP_MS; GAPSCAN_S=$GAPSCAN_S; NEAR=$NEAR; QMAXAGE_MS=$QMAXAGE_MS; SYNCMAX_MS=$SYNCMAX_MS; FEESV=@{BINANCE=$FVB;MEXC=$FVM;BYBIT=$FVY;OKX=$FVO}; MF=@{BINANCE=$MFB;MEXC=$MFM;BYBIT=$MFY;OKX=$MFO}; TF=@{BINANCE=$TFB;MEXC=$TFM;BYBIT=$TFY;OKX=$TFO}}
     $now=Get-Date; $trN=0; $trO=0
     foreach($grp in $script:markets.groups){
       $sym=$grp.normalized
