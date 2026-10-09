@@ -37,28 +37,8 @@ $EXITMIN = [double](Get-Cfg "EXIT_MIN_USDT" "500")
 $PERSIST = [int](Get-Cfg "PERSIST_READS" "2")
 $MAXAGE = [int](Get-Cfg "MAX_DATA_AGE_S" "90")
 $lastDepth = [DateTime]::MinValue
-$tracked = @{}
 $hist = @{}
-function WalkBook($levels, $sizeU, $isBuy){
-  $gotU=0; $vwap=0
-  foreach($l in $levels){
-    $p=[double]$l.p; $q=[double]$l.q; $u=$p*$q
-    $need=$sizeU-$gotU
-    if($need -le 0){ break }
-    $take=[Math]::Min($u,$need)
-    $vwap+=($take/$sizeU)*$p
-    $gotU+=$take
-  }
-  if($gotU -lt $sizeU){ return @{ok=$false; vwap=$null; gotU=$gotU} }
-  return @{ok=$true; vwap=$vwap; gotU=$gotU}
-}
-function SlipPct($vwap, $l1, $isBuy){
-  if($isBuy){ return ($vwap-$l1)/$l1*100 } else { return ($l1-$vwap)/$l1*100 }
-}
-function FindLvl($levels, $price){
-  foreach($l in $levels){ if([double]$l.p -eq [double]$price){ return $l } }
-  return $null
-}
+. (Join-Path $PSScriptRoot "depth-common.ps1")
 $PATHF = Get-Cfg "GITHUB_FILE_PATH" "data/alerts.json"
 $SYMS  = (Get-Cfg "SYMBOLS" "BTC/USDT,ETH/USDT,BNB/USDT,SOL/USDT,XRP/USDT,ADA/USDT,DOGE/USDT").Split(",") | ForEach-Object { $_.Trim() }
 
@@ -73,25 +53,6 @@ function Get-Prices($sym) {
   try { $y = Invoke-RestMethod "https://api.bybit.com/v5/market/tickers?category=spot&symbol=$s" -TimeoutSec 10; $t=$y.result.list[0]; $yB=[double]$t.bid1Price; $yA=[double]$t.ask1Price } catch { Write-Host "  Bybit $sym error: $($_.Exception.Message)" }
   try { $o = Invoke-RestMethod "https://www.okx.com/api/v5/market/ticker?instId=$oid" -TimeoutSec 10; $d=$o.data[0]; $oB=[double]$d.bidPx; $oA=[double]$d.askPx } catch { Write-Host "  OKX $sym error: $($_.Exception.Message)" }
   return @{ B=$b; M=$m; YB=$yB; YA=$yA; OB=$oB; OA=$oA }
-}
-function MkLevels($rows, $n){
-  $out=@()
-  $c=0
-  foreach($r in $rows){ if($c -ge $n){ break }; $out+=@{p=[double]$r[0]; q=[double]$r[1]}; $c++ }
-  return $out
-}
-function Get-Depth($ex,$sym){
-  $s=$sym.Replace("/",""); $oid=$sym.Replace("/","-")
-  try{
-    if($ex -eq "BINANCE"){ $d=Invoke-RestMethod "https://api.binance.com/api/v3/depth?symbol=$s&limit=5" -TimeoutSec 10; $a5=MkLevels $d.asks 5; $b5=MkLevels $d.bids 5; return @{ask=$a5[0].p; askQ=$a5[0].q; bid=$b5[0].p; bidQ=$b5[0].q; asks=$a5; bids=$b5} }
-    if($ex -eq "MEXC"){ $d=Invoke-RestMethod "https://api.mexc.com/api/v3/depth?symbol=$s&limit=5" -TimeoutSec 10; $a5=MkLevels $d.asks 5; $b5=MkLevels $d.bids 5; return @{ask=$a5[0].p; askQ=$a5[0].q; bid=$b5[0].p; bidQ=$b5[0].q; asks=$a5; bids=$b5} }
-    if($ex -eq "BYBIT"){ $d=Invoke-RestMethod "https://api.bybit.com/v5/market/orderbook?category=spot&symbol=$s&limit=5" -TimeoutSec 10; $a5=MkLevels $d.result.a 5; $b5=MkLevels $d.result.b 5; return @{ask=$a5[0].p; askQ=$a5[0].q; bid=$b5[0].p; bidQ=$b5[0].q; asks=$a5; bids=$b5} }
-    $d=Invoke-RestMethod "https://www.okx.com/api/v5/market/books?instId=$oid&sz=5" -TimeoutSec 10
-    $sa=$d.data[0].asks | Sort-Object { [double]$_[0] } | Select-Object -First 5
-    $sb=$d.data[0].bids | Sort-Object { [double]$_[0] } -Descending | Select-Object -First 5
-    $a5=MkLevels $sa 5; $b5=MkLevels $sb 5
-    return @{ask=$a5[0].p; askQ=$a5[0].q; bid=$b5[0].p; bidQ=$b5[0].q; asks=$a5; bids=$b5}
-  }catch{ return $null }
 }
 function Get-TradeUrl($ex,$sym){
   $uf=$sym.Replace("/","_"); $parts=$sym.Split("/"); $base=$parts[0]; $quote=$parts[1]
@@ -140,7 +101,7 @@ do {
     $px=@{BINANCE=@{bid=$bBid;ask=$bAsk;fee=$FEE_B};MEXC=@{bid=$mBid;ask=$mAsk;fee=$FEE_M};BYBIT=@{bid=$yB;ask=$yA;fee=$FEE_Y};OKX=@{bid=$oB;ask=$oA;fee=$FEE_O}}
     $nn=-999; $bx=""; $sx=""; $bp=0; $sp=0; $g=0; $fb=0; $fs=0; $best=-999
     foreach($be in $px.Keys){ foreach($se in $px.Keys){ if($be -eq $se){continue}
-      $gg=(($px[$se].bid-$px[$be].ask)/$px[$be].ask*100); $qq=$gg-$px[$be].fee-$px[$se].fee
+      $gg=(($px[$se].bid-$px[$be].ask)/$px[$be].ask*100); $qq=Compute-Net $px[$be].ask $px[$se].bid $px[$be].fee $px[$se].fee 0 0
       if($qq -gt $best){ $best=$qq; $bx=$be; $sx=$se; $bp=$px[$be].ask; $sp=$px[$se].bid; $g=$gg; $nn=$qq; $fb=$px[$be].fee; $fs=$px[$se].fee }
     }}
     $live += [ordered]@{symbol=$sym; binance_bid=$bBid; binance_ask=$bAsk; mexc_bid=$mBid; mexc_ask=$mAsk; bybit_bid=$yB; bybit_ask=$yA; okx_bid=$oB; okx_ask=$oA; best=[Math]::Round($best,4); best_buy=$bx; best_sell=$sx}
@@ -159,7 +120,7 @@ do {
       if (Push-Alert $alert) { Write-Host "  Publicado en GitHub" -ForegroundColor Cyan; $lastAlert[$sym]=Get-Date } else { Write-Host "  Fallo al publicar" -ForegroundColor Red }
     }
   }
-  $liveObj = @{ updated=([DateTime]::UtcNow.ToString("o")); symbols=$live }
+  $liveObj = @{ updated=([DateTime]::UtcNow.ToString("o")); ver=$COMMON_VERSION; symbols=$live }
   $liveObj | ConvertTo-Json -Depth 5 | Set-Content "data/live.json" -Encoding UTF8
   try {
     $lj = Get-Content "data/live.json" -Raw -Encoding UTF8
@@ -173,84 +134,25 @@ do {
   } catch { Write-Host "  Live push error: $($_.Exception.Message)" -ForegroundColor Yellow }
   if(((Get-Date)-$lastDepth).TotalSeconds -ge $DINT){
     $lastDepth=Get-Date; $depth=@(); $books=@()
-    $fees=@{BINANCE=$FEE_B;MEXC=$FEE_M;BYBIT=$FEE_Y;OKX=$FEE_O}
+    $cfg=@{MIN=$MIN; SIZE=$SIZE; THIN=$THIN; SAFE=$SAFE; EXITMIN=$EXITMIN; PERSIST=$PERSIST; MF=@{BINANCE=$MFB;MEXC=$MFM;BYBIT=$MFY;OKX=$MFO}; TF=@{BINANCE=$FEE_B;MEXC=$FEE_M;BYBIT=$FEE_Y;OKX=$FEE_O}}
+    $now=Get-Date; $trN=0; $trO=0
     foreach($sym in $SYMS){
-      $bk=@{}
-      foreach($ex in @("BINANCE","MEXC","BYBIT","OKX")){ $q=Get-Depth $ex $sym; if($q){ $bk[$ex]=$q } }
+      $bk=Get-DepthAll $sym 20
       if($bk.Count -lt 2){ continue }
-      $brow=[ordered]@{symbol=$sym}
-      foreach($ex in $bk.Keys){ $brow[$ex.ToLower()]=@{asks=$bk[$ex].asks; bids=$bk[$ex].bids} }
-      $books+=$brow
-      $mfees=@{BINANCE=$MFB;MEXC=$MFM;BYBIT=$MFY;OKX=$MFO}
-      $taker=@{BINANCE=$FEE_B;MEXC=$FEE_M;BYBIT=$FEE_Y;OKX=$FEE_O}
-      $now=Get-Date
-      foreach($me in $bk.Keys){
-        foreach($xe in $bk.Keys){
-          if($xe -eq $me){ continue }
-          foreach($model in @("A","B")){
-            $key="$sym|$me|$xe|$model"
-            if($model -eq "A"){
-              $entry=[double]$bk[$me].bid
-              $exitP=[double]$bk[$xe].bid
-              $w=WalkBook $bk[$xe].bids $SIZE $false
-              if(-not $w.ok -or $w.gotU -lt $EXITMIN){ $h=$null; if($hist.ContainsKey($key)){ $h=$hist[$key] }; if($h -and $h.pos -gt 0){ $depth+=[ordered]@{symbol=$sym; type="COMPRA EN COLA"; maker_exchange=$me; exit_exchange=$xe; model=$model; state="RETIRAR"; state_reason="sin liquidez de salida"; limit_price=$h.entry; exit_price=$exitP; net=$h.net; timestamp=([DateTime]::UtcNow.ToString("o")); pair_urls=@{buy=(Get-TradeUrl $me $sym); sell=(Get-TradeUrl $xe $sym)}} }; $hist.Remove($key); continue }
-              $slip=SlipPct $w.vwap $exitP $false
-              $net=(($exitP/$entry)-1)*100-$mfees[$me]-$taker[$xe]-$slip-$SAFE
-              $side="BID"; $askU=$bk[$me].ask*$bk[$me].askQ; $bidU=$entry*$bk[$me].bidQ
-              if(-not ($askU -le $THIN -and $askU -le $bidU*0.5)){ $side="BID-EQUILIBRADO" }
-            } else {
-              $entry=[double]$bk[$me].ask
-              $exitP=[double]$bk[$xe].ask
-              $w=WalkBook $bk[$xe].asks $SIZE $true
-              if(-not $w.ok -or $w.gotU -lt $EXITMIN){ $h=$null; if($hist.ContainsKey($key)){ $h=$hist[$key] }; if($h -and $h.pos -gt 0){ $depth+=[ordered]@{symbol=$sym; type="VENTA EN COLA"; maker_exchange=$me; exit_exchange=$xe; model=$model; state="RETIRAR"; state_reason="sin liquidez de salida"; limit_price=$h.entry; exit_price=$exitP; net=$h.net; timestamp=([DateTime]::UtcNow.ToString("o")); pair_urls=@{buy=(Get-TradeUrl $xe $sym); sell=(Get-TradeUrl $me $sym)}} }; $hist.Remove($key); continue }
-              $slip=SlipPct $w.vwap $exitP $true
-              $net=(($entry/$exitP)-1)*100-$mfees[$me]-$taker[$xe]-$slip-$SAFE
-              $side="ASK"; $askU=$entry*$bk[$me].askQ; $bidU=$bk[$me].bid*$bk[$me].bidQ
-              if(-not ($bidU -le $THIN -and $bidU -le $askU*0.5)){ $side="ASK-EQUILIBRADO" }
-            }
-            $h=$null; if($hist.ContainsKey($key)){ $h=$hist[$key] }
-            if($net -ge $MIN){ if($h){ $h.pos=$h.pos+1; $h.net=$net; $h.last=$now } else { $hist[$key]=@{pos=1; first=$now; last=$now; net=$net; entry=$entry; prevVol=$null; prevTime=$now; rate=0; queueAhead=$null}; $h=$hist[$key] } }
-            else { if($h -and $h.pos -gt 0){ $depth+=[ordered]@{symbol=$sym; type=$(if($model -eq "A"){"COMPRA EN COLA"}else{"VENTA EN COLA"}); maker_exchange=$me; exit_exchange=$xe; model=$model; state="RETIRAR"; state_reason="neto bajo umbral"; limit_price=$h.entry; exit_price=$exitP; net=[Math]::Round($net,4); timestamp=([DateTime]::UtcNow.ToString("o")); pair_urls=$(if($model -eq "A"){@{buy=(Get-TradeUrl $me $sym); sell=(Get-TradeUrl $xe $sym)}}else{@{buy=(Get-TradeUrl $xe $sym); sell=(Get-TradeUrl $me $sym)}})} }; $hist.Remove($key); continue }
-            $lvl=FindLvl $(if($model -eq "A"){$bk[$me].bids}else{$bk[$me].asks}) $entry
-            $curVol=$null; if($lvl){ $curVol=[Math]::Round($entry*[double]$lvl.q,2) }
-            $rate=0; $queueAhead=$curVol
-            if($h.prevVol -ne $null -and $curVol -ne $null){
-              $el=($now-$h.prevTime).TotalSeconds; if($el -gt 0){ $rate=[Math]::Round([Math]::Max(0,$h.prevVol-$curVol)/$el,4) }
-            }
-            $h.prevVol=$curVol; $h.prevTime=$now; $h.rate=$rate; $h.queueAhead=$queueAhead
-            $estFill=$null
-            if($rate -gt 0 -and $queueAhead -ne $null){ $estFill=[Math]::Round($queueAhead/$rate,1) }
-            $age=[Math]::Round(($now-$h.first).TotalSeconds,0)
-            $state="OBSERVAR"; $reason="neto positivo, cola grande o agotamiento lento"
-            $curAsk=[double]$bk[$me].ask; $curBid=[double]$bk[$me].bid
-            $fillEv=$false
-            if($model -eq "A"){ if($curAsk -gt $entry -and $rate -gt 0){ $fillEv=$true } }
-            else { if($curBid -lt $entry -and $rate -gt 0){ $fillEv=$true } }
-            if($fillEv -and $h.pos -ge $PERSIST){ $state="POSIBLE FILL"; $reason="volumen delante consumido con operaciones" }
-            elseif($h.pos -ge $PERSIST -and $queueAhead -ne $null -and $queueAhead -le $SIZE*2 -and $rate -gt 0){ $state="PREPARAR"; $reason="volumen delante reducido y salida disponible" }
-            elseif($h.pos -ge $PERSIST){ $state="OBSERVAR"; $reason="estable pero cola aun grande" }
-            $sig=[ordered]@{symbol=$sym; type=$(if($model -eq "A"){"COMPRA EN COLA"}else{"VENTA EN COLA"}); maker_exchange=$me; exit_exchange=$xe; model=$model; state=$state; state_reason=$reason; side=$side; limit_price=[Math]::Round($entry,8); queue_ahead_usdt=$queueAhead; depletion_rate=$rate; est_fill_s=$estFill; exit_price=[Math]::Round($exitP,8); exit_vol_usdt=[Math]::Round($w.gotU,2); gross=[Math]::Round($(if($model -eq "A"){(($exitP/$entry)-1)*100}else{(($entry/$exitP)-1)*100}),4); maker_fee=$mfees[$me]; taker_fee=$taker[$xe]; slippage=[Math]::Round($slip,4); safety=$SAFE; net=[Math]::Round($net,4); pos_reads=$h.pos; age_s=$age; timestamp=([DateTime]::UtcNow.ToString("o")); pair_urls=$(if($model -eq "A"){@{buy=(Get-TradeUrl $me $sym); sell=(Get-TradeUrl $xe $sym)}}else{@{buy=(Get-TradeUrl $xe $sym); sell=(Get-TradeUrl $me $sym)}})}
-            $depth+=$sig
-            if($state -eq "POSIBLE FILL"){
-              $f=[ordered]@{symbol=$sym; buy_exchange=$(if($model -eq "A"){$me}else{$xe}); sell_exchange=$(if($model -eq "A"){$xe}else{$me}); buy_price=$(if($model -eq "A"){$sig.limit_price}else{$sig.exit_price}); sell_price=$(if($model -eq "A"){$sig.exit_price}else{$sig.limit_price}); gross_spread=$sig.gross; net_spread=$sig.net; estimated_profit=[Math]::Round($sig.net/100*$SIZE,2); timestamp=$sig.timestamp; pair_urls=$sig.pair_urls; kind="fill"}
-              if(Push-Alert $f){ $lastAlert[$sym]=Get-Date }
-              Write-Host "  POSIBLE FILL $sym $($sig.type) $me -> $xe neto $($sig.net)%" -ForegroundColor Yellow
-            }
-            elseif($state -eq "PREPARAR"){ Write-Host "  PREPARAR $sym $($sig.type) $me @ $($sig.limit_price) -> $xe $($sig.exit_price) neto $($sig.net)% fill~$($estFill)s" -ForegroundColor Cyan }
-          }
+      $ev=Eval-Depth $sym $bk $cfg $hist $now ${function:Get-TradeUrl}
+      $books+=$ev.booksRow; $trN+=$ev.tradesN; $trO+=$ev.tradesOk
+      foreach($sig in $ev.signals){
+        $depth+=$sig
+        if($sig.state -eq "POSIBLE FILL" -or $sig.state -eq "POSIBLE FILL PARCIAL"){
+          $f=[ordered]@{symbol=$sig.symbol; buy_exchange=$(if($sig.model -eq "A"){$sig.maker_exchange}else{$sig.exit_exchange}); sell_exchange=$(if($sig.model -eq "A"){$sig.exit_exchange}else{$sig.maker_exchange}); buy_price=$(if($sig.model -eq "A"){$sig.limit_price}else{$sig.exit_price}); sell_price=$(if($sig.model -eq "A"){$sig.exit_price}else{$sig.limit_price}); gross_spread=$sig.gross; net_spread=$sig.net; estimated_profit=[Math]::Round($sig.net/100*$SIZE,2); timestamp=$sig.timestamp; pair_urls=$sig.pair_urls; kind="fill"; state=$sig.state}
+          if(Push-Alert $f){ $lastAlert[$sym]=Get-Date }
+          Write-Host "  $($sig.state) $sym $($sig.type) $($sig.maker_exchange) -> $($sig.exit_exchange) neto $($sig.net)% ev=$($sig.evidence)" -ForegroundColor Yellow
         }
+        elseif($sig.state -eq "PREPARAR"){ Write-Host "  PREPARAR $sym $($sig.type) $($sig.maker_exchange) @ $($sig.limit_price) -> $($sig.exit_exchange) $($sig.exit_price) neto $($sig.net)% fill~$($sig.est_fill_s)s" -ForegroundColor Cyan }
       }
     }
-    @{ updated=([DateTime]::UtcNow.ToString("o")); thin_usdt=$THIN; safety=$SAFE; persist_reads=$PERSIST; trade_usdt=$SIZE; signals=$depth; books=$books } | ConvertTo-Json -Depth 8 | Set-Content "data/depth.json" -Encoding UTF8
-    try {
-      $dj=Get-Content "data/depth.json" -Raw -Encoding UTF8
-      $db64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($dj))
-      $durl="https://api.github.com/repos/$REPO/contents/data/depth.json"
-      $dsha=$null; try{ $dsha=(Invoke-RestMethod -Uri "$durl`?ref=main" -Headers $H -TimeoutSec 10).sha }catch{}
-      $dbody=@{ message="Update depth - $([DateTime]::UtcNow.ToString('yyyy-MM-dd HH:mm:ss')) UTC"; content=$db64; branch="main" }
-      if($dsha){ $dbody.sha=$dsha }
-      Invoke-RestMethod -Uri $durl -Method Put -Headers $H -Body ($dbody|ConvertTo-Json -Depth 5) -ContentType "application/json" -TimeoutSec 15 | Out-Null
-      Write-Host "Depth publicado ($($depth.Count) senales)"
+    @{ updated=([DateTime]::UtcNow.ToString("o")); ver=$COMMON_VERSION; thin_usdt=$THIN; safety=$SAFE; persist_reads=$PERSIST; trade_usdt=$SIZE; trades_feeds="$trO/$trN"; signals=$depth; books=$books } | ConvertTo-Json -Depth 9 | Set-Content "data/depth.json" -Encoding UTF8
+    Write-Host "Depth publicado ($($depth.Count) senales, trades $trO/$trN)"
     } catch { Write-Host "  Depth push error: $($_.Exception.Message)" -ForegroundColor Yellow }
   }
   Write-Host "Fin scan #$n. Proximo en ${WAIT}s..."
