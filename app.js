@@ -78,23 +78,23 @@ function renderAlerts(alerts){
     else elements.historyBox.style.display='none';
   }
 }
-function showError(m){ elements.alertsContainer.innerHTML=''; elements.emptyState.style.display='none'; elements.errorState.style.display='block'; elements.errorMessage.textContent=m; updateStatus('error','Desconectado - reintentando...'); }
+function showError(m){ elements.alertsContainer.innerHTML=''; elements.emptyState.style.display='none'; elements.errorState.style.display='block'; elements.errorMessage.textContent=m; }
 async function fetchAlerts(){
   if(isLoading) return; isLoading=true;
   try{
     const r=await fetch(CONFIG.alertsUrl+'?t='+Date.now(),{cache:'no-store'});
     if(!r.ok) throw new Error('HTTP '+r.status);
     const alerts=normalizeAlerts(await r.json());
-    lastFetchTime=new Date(); lastOk=new Date();
-    renderAlerts(alerts); updateStatus('active','Conectado - Live');
-    const newest=alerts[0]&&alerts[0].timestamp;
-    elements.lastUpdate.textContent='web '+lastFetchTime.toLocaleTimeString()+' - ultima alerta '+(newest?formatTimeAgo(newest):'nunca');
-  }catch(e){ console.error(e); if(lastOk){ updateStatus('active','Conectado - esperando datos...'); } else showError('No pude cargar alerts.json: '+e.message); }
+    lastOk=new Date();
+    renderAlerts(alerts);
+  }catch(e){ console.error(e); if(!lastOk) showError('No pude cargar alerts.json: '+e.message); }
   finally{ isLoading=false; }
 }
-elements.refreshBtn.addEventListener('click',()=>{fetchAlerts();fetchLive();fetchDepth();renderVersion();});
-const WEB_VERSION='13';
-const STALE_S=90, DEAD_S=300;
+elements.refreshBtn.addEventListener('click',()=>{fetchAlerts();fetchLive();fetchDepth();fetchStatus();});
+const WEB_VERSION='13.1';
+const STATUS_URL='https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/status.json';
+const LIVE_MAX_S=5, DELAYED_MAX_S=15, DEAD_S=60, DESYNC_S=180;
+const STALE_S=90;
 const STATE_COLOR={OBSERVAR:'warn',PREPARAR:'prep','NIVEL REDUCIDO':'warn','POSIBLE EJECUCION':'prep','POSIBLE FILL PARCIAL':'prep','POSIBLE FILL':'yes',RETIRAR:'bad'};
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 function loadOrders(){ try{ return JSON.parse(localStorage.getItem('arb_orders')||'[]'); }catch(e){ return []; } }
@@ -127,7 +127,7 @@ function orderExitRecalc(o, amount){
   const amt=amount||o.qtyUSDT||WATCH.tradeSize;
   const da=depthAgeS();
   if(da==null) return {state:'EXCHANGE DESCONECTADO', detail:'sin libro'};
-  if(da>STALE_S) return {state:'DATOS ANTIGUOS', detail:'libro de hace '+Math.round(da)+' s'};
+  if(da>DELAYED_MAX_S) return {state:'DATOS ANTIGUOS', detail:'libro de hace '+Math.round(da)+' s'};
   if(o.type==='COMPRA EN COLA'){
     const w=exitVwap(o.symbol,o.exitEx,'bid',amt);
     if(!w.ok) return {state:'LIQUIDEZ INSUFICIENTE', covered:w.gotU, need:amt};
@@ -196,6 +196,7 @@ function levelVolAt(sym,ex,side,price){
   return null;
 }
 function placeOrderFromSignal(i){
+  if(!isOperable()){ alert('EL BOT ESTA PARADO o los datos son antiguos. No se puede poner ordenes desde una senal vieja.'); return; }
   const s=(window._signals||[])[i]; if(!s) return;
   const q=prompt('Importe de la orden en USDT (numero):', String(WATCH.tradeSize));
   const amt=(q&&!isNaN(Number(q))&&Number(q)>0)?Number(q):WATCH.tradeSize;
@@ -216,20 +217,21 @@ async function fetchDepth(){
     window._botVer=j.ver||null;
     window._depthUpdated=new Date(j.updated||Date.now()).getTime();
     window._books={}; (j.books||[]).forEach(b=>{ window._books[b.symbol]=b; });
-    const stale=((Date.now()-window._depthUpdated)/1000)>STALE_S;
+    const sysNow=computeSystemState();
+    const operable=(sysNow.state==='LIVE');
     let html='';
-    if(stale) html+='<div class="mkt"><div class="mkt-head"><span class="mkt-sym">DATOS ANTIGUOS</span><span class="mkt-net bad">BOT PARADO o sin actualizar</span></div><div class="combo">Libro de hace mas de '+STALE_S+' s. No se muestra PREPARAR ni POSIBLE FILL como operables.</div></div>';
+    if(!operable) html+='<div class="mkt"><div class="mkt-head"><span class="mkt-sym">NO OPERABLE: '+sysNow.state+'</span><span class="mkt-net bad">'+esc(sysNow.detail||'')+'</span></div><div class="combo">Las senales de abajo son la ultima foto conocida. No se puede poner ordenes ni considerar PREPARAR/POSIBLE FILL como vigentes.</div></div>';
     for(let i=0;i<rows.slice(0,15).length;i++){
       const s=rows[i];
       let dispState=s.state, cls=STATE_COLOR[s.state]||'no';
-      if(stale&&(s.state==='PREPARAR'||s.state.indexOf('POSIBLE FILL')===0)){ dispState='DATOS ANTIGUOS'; cls='bad'; }
+      if(!operable&&(s.state==='PREPARAR'||s.state.indexOf('POSIBLE FILL')===0)){ dispState='BLOQUEADA ('+sysNow.state+')'; cls='bad'; }
       html+='<div class="mkt"><div class="mkt-head"><span class="mkt-sym">'+s.symbol+' - '+s.type+'</span><span class="mkt-net '+cls+'">'+dispState+'</span></div>'
       +'<div class="combo">Maker <b>'+s.maker_exchange+'</b> limite <b>'+s.limit_price+'</b> -&gt; salida inmediata <b>'+s.exit_exchange+' '+s.exit_price+'</b> ['+s.model+'] - evidencia: <b>'+esc(s.evidence||'snapshot')+'</b></div>'
       +'<div class="combo">Cola delante: <b>'+(s.queue_ahead_usdt==null?'--':s.queue_ahead_usdt+' USDT')+'</b> - agotamiento <b>'+(s.depletion_rate==null?'--':s.depletion_rate+' USDT/s')+'</b> - fill estimado <b>'+(s.est_fill_s==null?'--':s.est_fill_s+' s')+'</b> - lecturas positivas <b>'+s.pos_reads+'</b> - edad <b>'+s.age_s+' s</b></div>'
       +'<div class="combo">Bruto <b>'+s.gross+'%</b> - maker <b>'+s.maker_fee+'%</b> - taker <b>'+s.taker_fee+'%</b> - slippage <b>'+s.slippage+'%</b> - margen <b>'+s.safety+'%</b> = <b>NETO '+s.net+'%</b> - salida max <b>'+s.exit_vol_usdt+' USDT</b> (niveles '+s.exit_lvls+')</div>'
       +'<div class="combo">'+esc(s.state_reason||'')+'</div>'
       +'<div class="combo">INVENTARIO NO VERIFICADO: necesitas el activo ya disponible en '+s.exit_exchange+'.</div>'
-      +'<div class="combo"><a href="'+(s.pair_urls?s.pair_urls.buy:'#')+'" target="_blank" rel="noopener">Abrir '+s.maker_exchange+'</a> - <a href="'+(s.pair_urls?s.pair_urls.sell:'#')+'" target="_blank" rel="noopener">Abrir '+s.exit_exchange+'</a> <button data-sig="'+i+'">HE PUESTO LA ORDEN</button></div></div>';
+      +'<div class="combo"><a href="'+(s.pair_urls?s.pair_urls.buy:'#')+'" target="_blank" rel="noopener">Abrir '+s.maker_exchange+'</a> - <a href="'+(s.pair_urls?s.pair_urls.sell:'#')+'" target="_blank" rel="noopener">Abrir '+s.exit_exchange+'</a> <button data-sig="'+i+'"'+(operable?'':' disabled')+'>HE PUESTO LA ORDEN</button></div></div>';
     }
     if(!rows.length) html='<div class="combo">Sin senales ahora. El bot publica cuando un modelo A/B da neto sobre el umbral con salida liquida.</div>';
     const books=j.books||[];
@@ -301,24 +303,85 @@ function exStatus(ex){
   if(live||book) return 'PARCIAL';
   return 'SIN DATOS';
 }
+function ageOf(t){ if(!t) return null; return (Date.now()-new Date(t).getTime())/1000; }
+// Estado unico del sistema. Peor criterio entre ticker, depth, heartbeat y versiones.
+// LIVE<=5s, RETRASADO<=15s (sin PREPARAR), DATOS ANTIGUOS>15s (no operable), BOT PARADO>60s.
+function computeSystemState(){
+  const st=window._status||null;
+  const botVer=window._botVer||window._liveBotVer||null;
+  const tickerAge=(st&&st.ticker_updated_at)?ageOf(st.ticker_updated_at):liveAgeS();
+  const depthAge=(st&&st.depth_updated_at)?ageOf(st.depth_updated_at):depthAgeS();
+  const hbAge=(st&&st.bot_heartbeat_at)?ageOf(st.bot_heartbeat_at):null;
+  const tradesAge=(st&&st.trades_updated_at)?ageOf(st.trades_updated_at):null;
+  if(tickerAge==null&&depthAge==null&&hbAge==null) return {state:'SIN DATOS', cls:'no', detail:'sin datos validos', ages:{}};
+  if(botVer&&botVer!==WEB_VERSION) return {state:'DESINCRONIZADO', cls:'bad', detail:'web v'+WEB_VERSION+' / bot v'+botVer, ages:{ticker:tickerAge,depth:depthAge,hb:hbAge}};
+  const ages=[tickerAge,depthAge,hbAge].filter(a=>a!=null);
+  const worst=Math.max.apply(null,ages);
+  const liveU=(st&&st.ticker_updated_at)||null, depthU=(st&&st.depth_updated_at)||null;
+  if(liveU&&depthU&&Math.abs(new Date(liveU)-new Date(depthU))/1000>DESYNC_S) return {state:'DESINCRONIZADO', cls:'bad', detail:'ticker y libro de momentos incompatibles', ages:{ticker:tickerAge,depth:depthAge,hb:hbAge}};
+  if(worst>DEAD_S) return {state:'BOT PARADO', cls:'bad', detail:'sin heartbeat ni datos hace '+Math.round(worst)+' s', ages:{ticker:tickerAge,depth:depthAge,hb:hbAge}};
+  if(worst>DELAYED_MAX_S) return {state:'DATOS ANTIGUOS', cls:'bad', detail:'datos de hace '+Math.round(worst)+' s, no operables', ages:{ticker:tickerAge,depth:depthAge,hb:hbAge}};
+  if(worst>LIVE_MAX_S) return {state:'RETRASADO', cls:'warn', detail:'datos de hace '+Math.round(worst)+' s, solo referencia', ages:{ticker:tickerAge,depth:depthAge,hb:hbAge,trades:tradesAge}};
+  return {state:'LIVE', cls:'yes', detail:'ticker, libro y heartbeat recientes', ages:{ticker:tickerAge,depth:depthAge,hb:hbAge,trades:tradesAge}};
+}
+function isOperable(){ return computeSystemState().state==='LIVE'; }
+async function fetchStatus(){
+  try{
+    const r=await fetch(STATUS_URL+'?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    window._status=await r.json();
+  }catch(e){ window._status=null; }
+  renderVersion();
+}
 async function renderVersion(){
   const box=document.getElementById('verBox'); if(!box) return;
+  const sys=computeSystemState();
   const botVer=window._botVer||window._liveBotVer||null;
-  const la=liveAgeS(), da=depthAgeS();
+  const st=window._status||null;
   const c=await fetchCommit();
-  let bot, bcls;
-  const desync=botVer&&botVer!==WEB_VERSION;
-  if(desync){ bot='DESINCRONIZADO (web '+WEB_VERSION+' / bot '+botVer+')'; bcls='bad'; }
-  else if(la==null&&da==null){ bot='SIN DATOS'; bcls='no'; }
-  else if(Math.max(la==null?9999:la,da==null?9999:da)>DEAD_S){ bot='BOT PARADO'; bcls='bad'; }
-  else if(Math.max(la==null?9999:la,da==null?9999:da)>STALE_S){ bot='RETRASADO'; bcls='warn'; }
-  else { bot='LIVE'; bcls='yes'; }
+  const a=sys.ages||{};
+  const fmt=(v)=>v==null?'--':Math.round(v)+' s';
   const exs=WATCH.exchanges.map(e=>e+':'+exStatus(e)).join(' - ');
   box.innerHTML='<div class="combo">Web <b>v'+WEB_VERSION+'</b> - bot <b>'+(botVer?('v'+botVer):'--')+'</b> - commit <b>'+esc(c.sha)+'</b> '+(c.date?esc(c.date):'')
-  +' - ticker hace <b>'+(la==null?'--':Math.round(la)+' s')+'</b> - libro hace <b>'+(da==null?'--':Math.round(da)+' s')+'</b></div>'
-  +'<div class="combo">Bot: <b>'+bot+'</b> - '+esc(exs)+'</div>';
-  const hb=document.getElementById('verBadge');
-  if(hb){ hb.innerHTML='<span class="mkt-net '+bcls+'">'+bot+'</span>'; }
+  +' - ciclo <b>'+esc((st&&st.cycle_id)||'--')+'</b> ('+esc((st&&st.cycle_duration_ms!=null)?(st.cycle_duration_ms+' ms'):'--')+')</div>'
+  +'<div class="combo">Ticker hace <b>'+fmt(a.ticker)+'</b> - libro hace <b>'+fmt(a.depth)+'</b> - heartbeat hace <b>'+fmt(a.hb)+'</b> - trades hace <b>'+fmt(a.trades)+'</b></div>'
+  +'<div class="combo">Estado: <b>'+sys.state+'</b> - '+esc(sys.detail)+'</div>'
+  +'<div class="combo">'+esc(exs)+'</div>';
+  const hb=document.getElementById('sysBadge');
+  if(hb){ hb.innerHTML='<span class="mkt-net '+sys.cls+'">'+sys.state+'</span>'; }
+  const old=document.getElementById('verBadge');
+  if(old){ old.innerHTML=''; }
+  updateRefreshButton(sys.state);
+  applyTableState(sys.state);
 }
-function init(){ renderWatch(); fetchAlerts(); fetchLive(); fetchDepth(); renderVersion(); setInterval(fetchAlerts,CONFIG.refreshInterval); setInterval(fetchLive,15000); setInterval(fetchDepth,30000); setInterval(renderVersion,5000); }
+function updateRefreshButton(state){
+  const b=document.getElementById('refreshBtn'); if(!b) return;
+  const n=document.getElementById('refreshNote'); 
+  if(state==='LIVE'||state==='RETRASADO'){ b.textContent='RECARGAR DATOS'; b.disabled=false; if(n) n.textContent='Recargar relee lo ultimo publicado. No genera precios nuevos.'; }
+  else { b.textContent='EL BOT ESTA PARADO'; b.disabled=false; if(n) n.textContent='Actualizar la pagina no genera precios nuevos. El bot debe estar activo.'; }
+}
+function applyTableState(state){
+  const t=document.getElementById('priceTitle');
+  const ageEl=document.getElementById('priceAge');
+  const liveU=(window._status&&window._status.ticker_updated_at)||null;
+  const age=liveU?(Date.now()-new Date(liveU).getTime())/1000:liveAgeS();
+  const ageTxt=age==null?'':'('+(age<=LIVE_MAX_S?'hace '+Math.round(age)+' s':age<=DELAYED_MAX_S?'hace '+Math.round(age)+' s':'hace '+Math.round(age)+' s')+')';
+  const ov=document.getElementById('tableOverlay');
+  const box=document.getElementById('liveBox');
+  if(t) t.textContent = state==='LIVE'?'Precio live':state==='RETRASADO'?'Precio retrasado':state==='BOT PARADO'?'Bot parado':'Ultima fotografia, no operable';
+  if(ageEl) ageEl.textContent = ageTxt;
+  const blocked=(state!=='LIVE');
+  if(box){ if(blocked) box.classList.add('dim'); else box.classList.remove('dim'); }
+  if(ov){ ov.innerHTML = blocked?'<div class="stale-overlay"><div><b>DATOS ANTIGUOS. NO UTILIZAR PARA ARBITRAJE.</b><br><span style="color:#9ca3af">Estado: '+state+'. El bot debe estar activo.</span></div></div>':''; }
+}
+function switchTab(which){
+  document.getElementById('tabLive').style.display=(which==='live')?'':'none';
+  document.getElementById('tabHist').style.display=(which==='hist')?'':'none';
+  document.getElementById('tabBtnLive').className=(which==='live')?'on':'';
+  document.getElementById('tabBtnHist').className=(which==='hist')?'on':'';
+}
+function init(){ renderWatch(); fetchAlerts(); fetchLive(); fetchDepth(); fetchStatus(); renderOrders();
+  document.getElementById('tabBtnLive').addEventListener('click',()=>switchTab('live'));
+  document.getElementById('tabBtnHist').addEventListener('click',()=>switchTab('hist'));
+  setInterval(fetchAlerts,30000); setInterval(fetchLive,15000); setInterval(fetchDepth,30000); setInterval(fetchStatus,10000); setInterval(renderVersion,5000); setInterval(renderOrders,10000); }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
