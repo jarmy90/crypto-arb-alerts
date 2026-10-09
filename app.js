@@ -2,9 +2,9 @@
 const GITHUB_URL = 'https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/alerts.json';
 const LIVE_URL = 'https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/live.json';
 const WATCH = {
-  exchanges: ['BINANCE','MEXC','BYBIT'],
+  exchanges: ['BINANCE','MEXC','BYBIT','OKX'],
   symbols: ['BTC/USDT','ETH/USDT','BNB/USDT','SOL/USDT','XRP/USDT','ADA/USDT','DOGE/USDT','DOT/USDT','POL/USDT','LTC/USDT','AVAX/USDT','LINK/USDT','UNI/USDT','ATOM/USDT','NEAR/USDT'],
-  minNet: 0.40, tradeSize: 500, feeBinance: 0.10, feeMexc: 0.05, feeBybit: 0.10
+  minNet: 0.40, tradeSize: 500, feeBinance: 0.10, feeMexc: 0.05, feeBybit: 0.10, feeOkx: 0.10
 };
 const CONFIG = { alertsUrl: GITHUB_URL, refreshInterval: 12000, maxRecentMinutes: 15 };
 
@@ -42,11 +42,11 @@ function updateStats(recent){
 }
 function renderWatch(){
   if(elements.watchList) elements.watchList.innerHTML = WATCH.symbols.map(s=>`<span class="pair-chip">${s}</span>`).join(' ');
-  if(elements.cfgLine) elements.cfgLine.textContent = `Exchanges: ${WATCH.exchanges.join(' ↔ ')} | Umbral neto ≥ ${WATCH.minNet}% | Trade ${WATCH.tradeSize} USDT | Fees Bin ${WATCH.feeBinance}% / Mex ${WATCH.feeMexc}% / Byb ${WATCH.feeBybit}% | Escaneo cada 8s`;
+  if(elements.cfgLine) elements.cfgLine.textContent = `Exchanges: ${WATCH.exchanges.join(' ↔ ')} | Umbral neto ≥ ${WATCH.minNet}% | Trade ${WATCH.tradeSize} USDT | Fees Bin ${WATCH.feeBinance}% / Mex ${WATCH.feeMexc}% / Byb ${WATCH.feeBybit}% / OKX ${WATCH.feeOkx}% | Escaneo cada 8s`;
 }
 function pairLinks(a){
   const sym=a.symbol||'BTC/USDT'; const uf=sym.replace('/','_'); const parts=sym.split('/'); const base=parts[0], quote=parts[1]||'USDT';
-  const url=(ex)=>ex==='BINANCE'?`https://www.binance.com/en/trade/${uf}?type=spot`:ex==='MEXC'?`https://www.mexc.com/exchange/${uf}`:`https://www.bybit.com/en/trade/spot/${base}/${quote}`;
+  const url=(ex)=>ex==='BINANCE'?`https://www.binance.com/en/trade/${uf}?type=spot`:ex==='MEXC'?`https://www.mexc.com/exchange/${uf}`:ex==='BYBIT'?`https://www.bybit.com/en/trade/spot/${base}/${quote}`:`https://www.okx.com/trade-spot/${base.toLowerCase()}-${quote.toLowerCase()}`;
   return { buy: (a.pair_urls&&a.pair_urls.buy)||url(a.buy_exchange), sell: (a.pair_urls&&a.pair_urls.sell)||url(a.sell_exchange) };
 }
 function createAlertCard(a, historic){
@@ -97,16 +97,17 @@ async function fetchLive(){
     const j=await r.json();
     const rows=j.symbols||[];
     const f=(v)=>{ v=Number(v); return v>=1000?v.toFixed(2):v>=1?v.toFixed(4):v.toFixed(6); };
-    let html=`<div style="overflow-x:auto"><table class="live-table"><thead><tr><th>Par</th><th>Bin ASK<br><span>c</span></th><th>Bin BID<br><span>v</span></th><th>Mex ASK<br><span>c</span></th><th>Mex BID<br><span>v</span></th><th>Byb ASK<br><span>c</span></th><th>Byb BID<br><span>v</span></th><th>Neto</th></tr></thead><tbody>`;
+    let html=`<div style="overflow-x:auto"><table class="live-table"><thead><tr><th>Par</th><th>Bin ASK<br><span>c</span></th><th>Bin BID<br><span>v</span></th><th>Mex ASK<br><span>c</span></th><th>Mex BID<br><span>v</span></th><th>Byb ASK<br><span>c</span></th><th>Byb BID<br><span>v</span></th><th>OKX ASK<br><span>c</span></th><th>OKX BID<br><span>v</span></th><th>Neto</th></tr></thead><tbody>`;
     for(const s of rows.slice(0,15)){
       const ok=s.best>=WATCH.minNet;
       const bB=Number(s.binance_bid),bA=Number(s.binance_ask),mB=Number(s.mexc_bid),mA=Number(s.mexc_ask);
       const yB=Number(s.bybit_bid||0),yA=Number(s.bybit_ask||0);
-      const hasY=!!(s.bybit_bid&&s.bybit_ask);
-      const minAsk=Math.min(bA,mA,...(hasY?[yA]:[]));
-      const maxBid=Math.max(bB,mB,...(hasY?[yB]:[]));
+      const oB=Number(s.okx_bid||0),oA=Number(s.okx_ask||0);
+      const hasY=!!(s.bybit_bid&&s.bybit_ask), hasO=!!(s.okx_bid&&s.okx_ask);
+      const minAsk=Math.min(bA,mA,...(hasY?[yA]:[]),...(hasO?[oA]:[]));
+      const maxBid=Math.max(bB,mB,...(hasY?[yB]:[]),...(hasO?[oB]:[]));
       const td=(v,cls)=>`<td class="${cls}">${f(v)}</td>`;
-      html+=`<tr class="${ok?'arb':''}"><td class="sym">${s.symbol.replace('/','')}</td>${td(bA,bA===minAsk?'bb':'')}${td(bB,bB===maxBid?'bs':'')}${td(mA,mA===minAsk?'bb':'')}${td(mB,mB===maxBid?'bs':'')}${hasY?td(yA,yA===minAsk?'bb':'')+td(yB,yB===maxBid?'bs':''):'<td>—</td><td>—</td>'}<td class="net ${ok?'yes':'no'}">${Number(s.best).toFixed(2)}%</td></tr>`;
+      html+=`<tr class="${ok?'arb':''}"><td class="sym">${s.symbol.replace('/','')}</td>${td(bA,bA===minAsk?'bb':'')}${td(bB,bB===maxBid?'bs':'')}${td(mA,mA===minAsk?'bb':'')}${td(mB,mB===maxBid?'bs':'')}${hasY?td(yA,yA===minAsk?'bb':'')+td(yB,yB===maxBid?'bs':''):'<td>—</td><td>—</td>'}${hasO?td(oA,oA===minAsk?'bb':'')+td(oB,oB===maxBid?'bs':''):'<td>—</td><td>—</td>'}<td class="net ${ok?'yes':'no'}">${Number(s.best).toFixed(2)}%</td></tr>`;
     }
     html+=`</tbody></table></div><div class="combo">ASK=compro · BID=vendo · <b style="color:#f59e0b">amarillo</b>=mejor compra/venta · <b style="color:#10b981">verde</b>=arb ≥${WATCH.minNet}% · ${rows[0]?.best_buy?`Ej: BTC ${rows[0].best_buy}→${rows[0].best_sell}`:''}</div>`;
     if(elements.liveBox) elements.liveBox.innerHTML=html||'sin datos';
