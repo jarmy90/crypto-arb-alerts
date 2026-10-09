@@ -99,9 +99,17 @@ async function fetchLive(){
     let html='';
     for(const s of rows.slice(0,15)){
       const ok=s.best>=WATCH.minNet;
-      const byb=s.bybit_bid?` / Byb <b>${Number(s.bybit_bid).toFixed(2)}</b>`:'';
-      const dir=(s.best_buy&&s.best_sell)?` <span style="color:#6b7280">${s.best_buy}→${s.best_sell}</span>`:'';
-      html+=`<div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid #374151"><span><b>${s.symbol}</b> Bin <b>${Number(s.binance_bid).toFixed(2)}</b> / Mex <b>${Number(s.mexc_bid).toFixed(2)}</b>${byb}${dir}</span><span style="color:${ok?'#10b981':'#9ca3af'}">${ok?'🟢 ARB '+Number(s.best).toFixed(2)+'%':'⚪ '+Number(s.best).toFixed(2)+'% neto'}</span></div>`;
+      const bB=Number(s.binance_bid),bA=Number(s.binance_ask),mB=Number(s.mexc_bid),mA=Number(s.mexc_ask);
+      const yB=Number(s.bybit_bid||0),yA=Number(s.bybit_ask||0);
+      const hasY=!!(s.bybit_bid&&s.bybit_ask);
+      const minAsk=Math.min(bA,mA,...(hasY?[yA]:[]));
+      const maxBid=Math.max(bB,mB,...(hasY?[yB]:[]));
+      const f=(v)=>v>=1000?v.toFixed(2):v>=1?v.toFixed(4):v.toFixed(6);
+      const cell=(lbl,val,cls)=>`<div class="cell ${cls}"><div class="lbl">${lbl}</div><div class="val">${f(val)}</div></div>`;
+      const col=(name,ask,bid)=>`<div class="ex"><div class="ex-name">${name}</div>${cell('ASK · compro',ask,ask===minAsk?'best-buy':'')}${cell('BID · vendo',bid,bid===maxBid?'best-sell':'')}</div>`;
+      html+=`<div class="mkt ${ok?'arb':''}"><div class="mkt-head"><span class="mkt-sym">${s.symbol}</span><span class="mkt-net ${ok?'yes':'no'}">${ok?'🟢 '+Number(s.best).toFixed(2)+'% ARB':'⚪ '+Number(s.best).toFixed(2)+'% neto'}</span></div>`
+        +`<div class="ex-grid">${col('BINANCE',bA,bB)}${col('MEXC',mA,mB)}${hasY?col('BYBIT',yA,yB):''}</div>`
+        +`<div class="combo">Mejor: comprar en <b>${s.best_buy||'—'}</b> → vender en <b>${s.best_sell||'—'}</b> · esa combinación en <b style="color:${ok?'#10b981':'#f59e0b'}">${ok?'verde (oportunidad)':'amarillo (bajo umbral)'}</b></div></div>`;
     }
     if(elements.liveBox) elements.liveBox.innerHTML=html||'sin datos';
     if(elements.liveTime) elements.liveTime.textContent=`${new Date(j.updated||Date.now()).toLocaleTimeString()} (${formatTimeAgo(j.updated||Date.now())}) · del bot`;
