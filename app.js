@@ -1,6 +1,7 @@
 // Crypto Arbitrage Detector - web v7 (ASCII-safe, UTF-8)
 const GITHUB_URL = 'https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/alerts.json';
 const LIVE_URL = 'https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/live.json';
+const DEPTH_URL = 'https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/depth.json';
 const WATCH = {
   exchanges: ['BINANCE','MEXC','BYBIT','OKX'],
   symbols: ['BTC/USDT','ETH/USDT','BNB/USDT','SOL/USDT','XRP/USDT','ADA/USDT','DOGE/USDT','DOT/USDT','POL/USDT','LTC/USDT','AVAX/USDT','LINK/USDT','UNI/USDT','ATOM/USDT','NEAR/USDT'],
@@ -19,7 +20,8 @@ const elements = {
   refreshBtn: document.getElementById('refreshBtn'), activeCount: document.getElementById('activeCount'),
   bestSpread: document.getElementById('bestSpread'), topProfit: document.getElementById('topProfit'),
   watchList: document.getElementById('watchList'), cfgLine: document.getElementById('cfgLine'),
-  liveBox: document.getElementById('liveBox'), liveTime: document.getElementById('liveTime')
+  liveBox: document.getElementById('liveBox'), liveTime: document.getElementById('liveTime'),
+  depthBox: document.getElementById('depthBox'), depthTime: document.getElementById('depthTime')
 };
 
 function normalizeAlerts(j) {
@@ -89,7 +91,23 @@ async function fetchAlerts(){
   }catch(e){ console.error(e); if(lastOk){ updateStatus('active','Conectado - esperando datos...'); } else showError('No pude cargar alerts.json: '+e.message); }
   finally{ isLoading=false; }
 }
-elements.refreshBtn.addEventListener('click',()=>{fetchAlerts();fetchLive();});
+elements.refreshBtn.addEventListener('click',()=>{fetchAlerts();fetchLive();fetchDepth();});
+async function fetchDepth(){
+  try{
+    const r=await fetch(DEPTH_URL+'?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    const rows=j.signals||[];
+    let html='';
+    for(const s of rows.slice(0,15)){
+      const cls=s.fill_suspected?'arb':'';
+      html+='<div class="mkt '+cls+'"><div class="mkt-head"><span class="mkt-sym">'+s.symbol+' - '+s.buy_exchange+' -&gt; '+s.sell_exchange+'</span><span class="mkt-net '+(s.fill_suspected?'yes':'no')+'">'+(s.fill_suspected?'POSIBLE FILL':Number(s.net_if_filled).toFixed(2)+'% si entra')+'</span></div>'
+      +'<div class="combo">Entrada limite sugerida <b>'+s.entry_price+'</b> (ask fino '+s.ask_vol_usdt+' USDT) - vender en <b>'+s.sell_exchange+' '+s.sell_bid+'</b> - neto estimado <b>'+s.net_if_filled+'%</b></div></div>';
+    }
+    if(elements.depthBox) elements.depthBox.innerHTML=html||'Sin libros finos ahora (ask &gt; '+j.thin_usdt+' USDT en los 15 mercados).';
+    if(elements.depthTime) elements.depthTime.textContent=new Date(j.updated||Date.now()).toLocaleTimeString()+' ('+formatTimeAgo(j.updated||Date.now())+')';
+  }catch(e){ if(elements.depthBox) elements.depthBox.innerHTML='Depth aun no publicado - corre el bot para generarlo.'; }
+}
 async function fetchLive(){
   try{
     const r=await fetch(LIVE_URL+'?t='+Date.now(),{cache:'no-store'});
@@ -114,5 +132,5 @@ async function fetchLive(){
     if(elements.liveTime) elements.liveTime.textContent=new Date(j.updated||Date.now()).toLocaleTimeString()+' ('+formatTimeAgo(j.updated||Date.now())+') - del bot';
   }catch(e){ if(elements.liveBox) elements.liveBox.innerHTML='live aun no publicado por el bot - corre <b>.\\bot.ps1</b> para generarlo. ('+e.message+')'; }
 }
-function init(){ renderWatch(); fetchAlerts(); fetchLive(); setInterval(fetchAlerts,CONFIG.refreshInterval); setInterval(fetchLive,15000); }
+function init(){ renderWatch(); fetchAlerts(); fetchLive(); fetchDepth(); setInterval(fetchAlerts,CONFIG.refreshInterval); setInterval(fetchLive,15000); setInterval(fetchDepth,30000); }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
