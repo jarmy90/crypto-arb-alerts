@@ -101,8 +101,23 @@ async function fetchDepth(){
     let html='';
     for(const s of rows.slice(0,15)){
       const cls=s.fill_suspected?'arb':'';
+      const nxt=(s.ask_next!=null)?'<div class="combo">Siguiente en cola ASK2 <b>'+s.ask_next+'</b> ('+s.ask_next_vol_usdt+' USDT) - neto si compras ahi <b>'+s.net_lvl2+'%</b> - '+(s.holds_lvl2?'AGUANTA aunque se coman el nivel 1':'NO aguanta si sube al nivel 2')+'</div>':'';
       html+='<div class="mkt '+cls+'"><div class="mkt-head"><span class="mkt-sym">'+s.symbol+' - '+s.buy_exchange+' -&gt; '+s.sell_exchange+'</span><span class="mkt-net '+(s.fill_suspected?'yes':'no')+'">'+(s.fill_suspected?'POSIBLE FILL':Number(s.net_if_filled).toFixed(2)+'% si entra')+'</span></div>'
-      +'<div class="combo">Entrada limite sugerida <b>'+s.entry_price+'</b> (ask fino '+s.ask_vol_usdt+' USDT) - vender en <b>'+s.sell_exchange+' '+s.sell_bid+'</b> - neto estimado <b>'+s.net_if_filled+'%</b></div></div>';
+      +'<div class="combo">Entrada limite sugerida <b>'+s.entry_price+'</b> (ask fino '+s.ask_vol_usdt+' USDT) - vender en <b>'+s.sell_exchange+' '+s.sell_bid+'</b> - neto estimado <b>'+s.net_if_filled+'%</b></div>'+nxt+'</div>';
+    }
+    const books=j.books||[];
+    if(books.length){
+      html+='<div class="combo" style="margin:.6rem 0">Siguiente en cola por mercado (top 3 asks/bids). Abre cada par:</div>';
+      for(const b of books){
+        let inner='';
+        for(const ex of ['binance','mexc','bybit','okx']){
+          if(!b[ex]) continue;
+          const a=(b[ex].asks||[]).map((l,i)=>'A'+(i+1)+' '+l.p+' ('+l.q+')').join(' - ');
+          const dd=(b[ex].bids||[]).map((l,i)=>'B'+(i+1)+' '+l.p+' ('+l.q+')').join(' - ');
+          inner+='<div style="margin:.25rem 0"><b>'+ex.toUpperCase()+'</b><br><span>ASK: '+a+'</span><br><span>BID: '+dd+'</span></div>';
+        }
+        html+='<details style="margin:.3rem 0"><summary><b>'+b.symbol+'</b> - ver cola</summary><div style="font-size:.78rem">'+inner+'</div></details>';
+      }
     }
     if(elements.depthBox) elements.depthBox.innerHTML=html||'Sin libros finos ahora (ask &gt; '+j.thin_usdt+' USDT en los 15 mercados).';
     if(elements.depthTime) elements.depthTime.textContent=new Date(j.updated||Date.now()).toLocaleTimeString()+' ('+formatTimeAgo(j.updated||Date.now())+')';
