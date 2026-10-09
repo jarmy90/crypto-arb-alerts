@@ -91,8 +91,9 @@ async function fetchAlerts(){
   finally{ isLoading=false; }
 }
 elements.refreshBtn.addEventListener('click',()=>{fetchAlerts();fetchLive();fetchDepth();fetchStatus();});
-const WEB_VERSION='13.1';
+const WEB_VERSION='13.2';
 const STATUS_URL='https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/status.json';
+const MARKETS_URL='https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/markets.json';
 const LIVE_MAX_S=5, DELAYED_MAX_S=15, DEAD_S=60, DESYNC_S=180;
 const STALE_S=90;
 const STATE_COLOR={OBSERVAR:'warn',PREPARAR:'prep','NIVEL REDUCIDO':'warn','POSIBLE EJECUCION':'prep','POSIBLE FILL PARCIAL':'prep','POSIBLE FILL':'yes',RETIRAR:'bad'};
@@ -226,7 +227,7 @@ async function fetchDepth(){
       let dispState=s.state, cls=STATE_COLOR[s.state]||'no';
       if(!operable&&(s.state==='PREPARAR'||s.state.indexOf('POSIBLE FILL')===0)){ dispState='BLOQUEADA ('+sysNow.state+')'; cls='bad'; }
       html+='<div class="mkt"><div class="mkt-head"><span class="mkt-sym">'+s.symbol+' - '+s.type+'</span><span class="mkt-net '+cls+'">'+dispState+'</span></div>'
-      +'<div class="combo">Maker <b>'+s.maker_exchange+'</b> limite <b>'+s.limit_price+'</b> -&gt; salida inmediata <b>'+s.exit_exchange+' '+s.exit_price+'</b> ['+s.model+'] - evidencia: <b>'+esc(s.evidence||'snapshot')+'</b></div>'
+      +'<div class="combo">Grupo <b>'+esc(s.normalized_symbol||s.symbol)+'</b> ('+esc(s.base||'')+'/'+esc(s.quote||'')+') - maker <b>'+s.maker_exchange+'</b> ['+esc(s.maker_native_symbol||'')+'] limite <b>'+s.limit_price+'</b> -&gt; salida inmediata <b>'+s.exit_exchange+'</b> ['+esc(s.exit_native_symbol||'')+'] '+s.exit_price+' ['+s.model+'] - evidencia: <b>'+esc(s.evidence||'snapshot')+'</b></div>'
       +'<div class="combo">Cola delante: <b>'+(s.queue_ahead_usdt==null?'--':s.queue_ahead_usdt+' USDT')+'</b> - agotamiento <b>'+(s.depletion_rate==null?'--':s.depletion_rate+' USDT/s')+'</b> - fill estimado <b>'+(s.est_fill_s==null?'--':s.est_fill_s+' s')+'</b> - lecturas positivas <b>'+s.pos_reads+'</b> - edad <b>'+s.age_s+' s</b></div>'
       +'<div class="combo">Bruto <b>'+s.gross+'%</b> - maker <b>'+s.maker_fee+'%</b> - taker <b>'+s.taker_fee+'%</b> - slippage <b>'+s.slippage+'%</b> - margen <b>'+s.safety+'%</b> = <b>NETO '+s.net+'%</b> - salida max <b>'+s.exit_vol_usdt+' USDT</b> (niveles '+s.exit_lvls+')</div>'
       +'<div class="combo">'+esc(s.state_reason||'')+'</div>'
@@ -261,19 +262,25 @@ async function fetchLive(){
     const j=await r.json();
     const rows=j.symbols||[];
     const f=(v)=>{ v=Number(v); return v>=1000?v.toFixed(2):v>=1?v.toFixed(4):v.toFixed(6); };
+    const qsel=quoteSel();
     let html='<div style="overflow-x:auto"><table class="live-table"><thead><tr><th>Par</th><th>Bin ASK<br><span>c</span></th><th>Bin BID<br><span>v</span></th><th>Mex ASK<br><span>c</span></th><th>Mex BID<br><span>v</span></th><th>Byb ASK<br><span>c</span></th><th>Byb BID<br><span>v</span></th><th>OKX ASK<br><span>c</span></th><th>OKX BID<br><span>v</span></th><th>Neto</th></tr></thead><tbody>';
-    for(const s of rows.slice(0,15)){
-      const ok=s.best>=WATCH.minNet;
-      const bB=Number(s.binance_bid),bA=Number(s.binance_ask),mB=Number(s.mexc_bid),mA=Number(s.mexc_ask);
-      const yB=Number(s.bybit_bid||0),yA=Number(s.bybit_ask||0);
-      const oB=Number(s.okx_bid||0),oA=Number(s.okx_ask||0);
-      const hasY=!!(s.bybit_bid&&s.bybit_ask), hasO=!!(s.okx_bid&&s.okx_ask);
-      const minAsk=Math.min(bA,mA,...(hasY?[yA]:[]),...(hasO?[oA]:[]));
-      const maxBid=Math.max(bB,mB,...(hasY?[yB]:[]),...(hasO?[oB]:[]));
-      const td=(v,cls)=>'<td class="'+cls+'">'+f(v)+'</td>';
-      html+='<tr class="'+(ok?'arb':'')+'"><td class="sym">'+s.symbol.replace('/','')+'</td>'+td(bA,bA===minAsk?'bb':'')+td(bB,bB===maxBid?'bs':'')+td(mA,mA===minAsk?'bb':'')+td(mB,mB===maxBid?'bs':'')+(hasY?td(yA,yA===minAsk?'bb':'')+td(yB,yB===maxBid?'bs':''):'<td>--</td><td>--</td>')+(hasO?td(oA,oA===minAsk?'bb':'')+td(oB,oB===maxBid?'bs':''):'<td>--</td><td>--</td>')+'<td class="net '+(ok?'yes':'no')+'">'+Number(s.best).toFixed(2)+'%</td></tr>';
+    let shown=0;
+    for(const s of rows){
+      if(s.quote&&(qsel==='USDC'||qsel==='USDT')&&s.quote!==qsel) continue;
+      const g=groupMembers(s.symbol);
+      if(g&&Object.keys(g.members||{}).length<2) continue;
+      shown++;
+      const ok=(s.best!=null&&s.best>=WATCH.minNet);
+      const P={BINANCE:[s.binance_ask,s.binance_bid],MEXC:[s.mexc_ask,s.mexc_bid],BYBIT:[s.bybit_ask,s.bybit_bid],OKX:[s.okx_ask,s.okx_bid]};
+      const asks=Object.keys(P).filter(e=>P[e][0]!=null&&Number(P[e][0])>0).map(e=>Number(P[e][0]));
+      const bids=Object.keys(P).filter(e=>P[e][1]!=null&&Number(P[e][1])>0).map(e=>Number(P[e][1]));
+      const minAsk=asks.length?Math.min.apply(null,asks):null;
+      const maxBid=bids.length?Math.max.apply(null,bids):null;
+      const cell=(e,idx,cls)=>{ const v=P[e][idx]; if(v==null||!(Number(v)>0)) return '<td class="na">NO DISPONIBLE</td>'; const n=Number(v); return '<td class="'+(((idx===0&&n===minAsk)||(idx===1&&n===maxBid))?cls:'')+'">'+f(n)+'</td>'; };
+      const star=(s.principal||(window._markets&&window._markets.principal&&window._markets.principal[s.base]===s.quote))?' ★':'';
+      html+='<tr class="'+(ok?'arb':'')+'"><td class="sym">'+s.symbol+star+'</td>'+cell('BINANCE',0,'bb')+cell('BINANCE',1,'bs')+cell('MEXC',0,'bb')+cell('MEXC',1,'bs')+cell('BYBIT',0,'bb')+cell('BYBIT',1,'bs')+cell('OKX',0,'bb')+cell('OKX',1,'bs')+'<td class="net '+(ok?'yes':'no')+'">'+(s.best==null?'--':Number(s.best).toFixed(2)+'%')+'</td></tr>';
     }
-    html+='</tbody></table></div><div class="combo">ASK=compro (naranja) - BID=vendo (azul) - verde=arb &gt;='+WATCH.minNet+'%</div>';
+    html+='</tbody></table></div><div class="combo">ASK=compro (naranja) - BID=vendo (azul) - verde=arb &gt;='+WATCH.minNet+'% - celdas grises: par no disponible en ese exchange - ★: cotizacion principal</div>';
     window._liveRows={}; rows.forEach(s=>{ window._liveRows[s.symbol]=s; });
     window._liveUpdated=new Date(j.updated||Date.now()).getTime();
     window._liveBotVer=j.ver||window._liveBotVer||null;
@@ -302,6 +309,27 @@ function exStatus(ex){
   if(live&&book) return 'OK';
   if(live||book) return 'PARCIAL';
   return 'SIN DATOS';
+}
+function groupMembers(sym){
+  const M=window._markets||null;
+  if(!M||!M.groups) return null;
+  for(const g of M.groups){ if(g.normalized===sym) return g; }
+  return null;
+}
+function quoteSel(){ return window._quoteSel||'ALL'; }
+async function fetchMarkets(){
+  try{
+    const r=await fetch(MARKETS_URL+'?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    window._markets=await r.json();
+  }catch(e){ window._markets=null; }
+  renderQuoteSel();
+}
+function renderQuoteSel(){
+  const box=document.getElementById('quoteSel'); if(!box) return;
+  const q=[['ALL','Todos'],['USDC','USDC'],['USDT','USDT']];
+  box.innerHTML=q.map(x=>'<button data-q="'+x[0]+'"'+(quoteSel()===x[0]?' class="on"':'')+'>'+x[1]+'</button>').join(' ');
+  box.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ window._quoteSel=b.dataset.q; renderQuoteSel(); fetchLive(); }));
 }
 function ageOf(t){ if(!t) return null; return (Date.now()-new Date(t).getTime())/1000; }
 // Estado unico del sistema. Peor criterio entre ticker, depth, heartbeat y versiones.
@@ -347,6 +375,15 @@ async function renderVersion(){
   +'<div class="combo">Ticker hace <b>'+fmt(a.ticker)+'</b> - libro hace <b>'+fmt(a.depth)+'</b> - heartbeat hace <b>'+fmt(a.hb)+'</b> - trades hace <b>'+fmt(a.trades)+'</b></div>'
   +'<div class="combo">Estado: <b>'+sys.state+'</b> - '+esc(sys.detail)+'</div>'
   +'<div class="combo">'+esc(exs)+'</div>';
+  const M=window._markets||null;
+  const hl=document.getElementById('healthLine');
+  if(hl){
+    let h='Grupos con 2+ exchanges: <b>'+((M&&M.groups)?M.groups.filter(g=>Object.keys(g.members||{}).length>=2).length:'--')+'</b>';
+    if(M&&M.suspended&&M.suspended.length){ h+=' - SUSPENDIDO: '+M.suspended.slice(0,8).map(x=>esc(x.base+'/'+x.quote+' en '+x.exchange)).join(', ')+(M.suspended.length>8?' (+'+(M.suspended.length-8)+' mas)':''); }
+    else { h+=' - sin suspendidos'; }
+    if(M&&M.updated){ h+=' - catalogo '+formatTimeAgo(M.updated); }
+    hl.innerHTML=h;
+  }
   const hb=document.getElementById('sysBadge');
   if(hb){ hb.innerHTML='<span class="mkt-net '+sys.cls+'">'+sys.state+'</span>'; }
   const old=document.getElementById('verBadge');
@@ -380,8 +417,9 @@ function switchTab(which){
   document.getElementById('tabBtnLive').className=(which==='live')?'on':'';
   document.getElementById('tabBtnHist').className=(which==='hist')?'on':'';
 }
-function init(){ renderWatch(); fetchAlerts(); fetchLive(); fetchDepth(); fetchStatus(); renderOrders();
-  document.getElementById('tabBtnLive').addEventListener('click',()=>switchTab('live'));
-  document.getElementById('tabBtnHist').addEventListener('click',()=>switchTab('hist'));
-  setInterval(fetchAlerts,30000); setInterval(fetchLive,15000); setInterval(fetchDepth,30000); setInterval(fetchStatus,10000); setInterval(renderVersion,5000); setInterval(renderOrders,10000); }
+function init(){ renderWatch(); fetchAlerts(); fetchLive(); fetchDepth(); fetchStatus(); fetchMarkets(); renderOrders();
+  const bL=document.getElementById('tabBtnLive'), bH=document.getElementById('tabBtnHist');
+  if(bL) bL.addEventListener('click',()=>switchTab('live'));
+  if(bH) bH.addEventListener('click',()=>switchTab('hist'));
+  setInterval(fetchAlerts,30000); setInterval(fetchLive,15000); setInterval(fetchDepth,30000); setInterval(fetchStatus,10000); setInterval(fetchMarkets,300000); setInterval(renderVersion,5000); setInterval(renderOrders,10000); }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
