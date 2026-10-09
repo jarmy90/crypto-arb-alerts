@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Arbitraje crypto en vivo entre Binance, MEXC, Bybit y OKX">
-    <title>Crypto Arbitrage Detector | Live v7</title>
-    <link rel="stylesheet" href="style.css?v=7">
+    <title>Crypto Arbitrage Detector | Live v13</title>
+    <link rel="stylesheet" href="style.css?v=13">
     <style>
     .watch{background:#1a1f2e;border:1px solid #374151;border-radius:1rem;padding:1rem;margin-bottom:1.5rem}
     .pair-chip{display:inline-block;background:#242b3d;border:1px solid #374151;border-radius:.5rem;padding:.15rem .5rem;margin:.15rem;font-size:.78rem}
@@ -41,7 +41,7 @@
     <div class="container">
         <header class="header">
             <div class="header-content">
-                <h1 class="title"><span class="icon">[CHART]</span>Crypto Arbitrage Detector <span class="ver">v7 · 4 exchanges</span></h1>
+                <h1 class="title"><span class="icon">[CHART]</span>Crypto Arbitrage Detector <span class="ver">v13 · 4 exchanges</span> <span id="verBadge"></span></h1>
                 <p class="subtitle">Solo deteccion entre <b>Binance</b> - <b>MEXC</b> - <b>Bybit</b> - <b>OKX</b> (spot). No ejecuta trades.</p>
             </div>
             <div class="status">
@@ -49,6 +49,10 @@
                 <div class="last-update">Ultima lectura: <span id="lastUpdate">-</span></div>
             </div>
         </header>
+        <div class="watch">
+            <b>Version y estado:</b>
+            <div id="verBox" style="margin-top:.5rem">cargando...</div>
+        </div>
         <div class="watch">
             <b>Precio live del bot (<span id="liveTime">-</span>):</b>
             <div class="cfg">Naranja = mejor ASK (compra mas barata) · Azul = mejor BID (venta mas cara). Fila verde = arbitraje igual o mayor a 0.40% neto.</div>
@@ -84,7 +88,7 @@
         </main>
         <footer class="footer"><p>Solo deteccion, no es consejo financiero.</p><p>Compra en ASK, vende en BID · Neto = (bid-ask)/ask x 100 - fees · refresh 12s</p></footer>
     </div>
-    <script src="app.js?v=7"></script>
+    <script src="app.js?v=13"></script>
 </body>
 </html>
 
