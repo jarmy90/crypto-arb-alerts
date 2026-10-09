@@ -18,7 +18,20 @@ $MAXAGE=[int](Get-Cfg $map "MAX_DATA_AGE_S" "90")
 $lastDepth=[DateTime]::MinValue
 $hist=@{}
 . (Join-Path $PSScriptRoot "depth-common.ps1")
+. (Join-Path $PSScriptRoot "markets-common.ps1")
 $SYMS=(Get-Cfg $map "SYMBOLS" "BTC/USDT,ETH/USDT,BNB/USDT,SOL/USDT,XRP/USDT,ADA/USDT,DOGE/USDT").Split(",") | ForEach-Object{$_.Trim()}
+$BASES=$SYMS | ForEach-Object { $_.Split("/")[0] } | Sort-Object -Unique
+$QUOTES=@("USDT","USDC")
+$script:markets=$null; $script:marketsTs=[DateTime]::MinValue
+function Update-Markets($push){
+  $cat=Get-CatalogAll
+  $bg=Build-Groups $cat $BASES $QUOTES
+  $pr=Select-Principal $bg.groups
+  $script:markets=[ordered]@{updated=([DateTime]::UtcNow.ToString("o")); ver=$COMMON_VERSION; quotes=$QUOTES; principal=$pr; groups=$bg.groups; suspended=$bg.suspended}
+  $script:markets | ConvertTo-Json -Depth 6 | Set-Content "data/markets.json" -Encoding UTF8
+  $script:marketsTs=Get-Date
+  Write-Host "Mercados: $(($bg.groups | Where-Object { $_.members.Count -ge 2 }).Count) grupos con 2+ exchanges, $($bg.suspended.Count) suspendidos"
+}
 $last=@{}
 if(-not (Test-Path "data")){ New-Item -ItemType Directory data | Out-Null }
 function Save-Local($a){
@@ -46,27 +59,33 @@ do{
   $script:exStat=@{BINANCE=@{ok=0;fail=0};MEXC=@{ok=0;fail=0};BYBIT=@{ok=0;fail=0};OKX=@{ok=0;fail=0}}
   $sw=[Diagnostics.Stopwatch]::StartNew()
   Write-Host "`n--- Ciclo $script:cycleId $([DateTime]::UtcNow.ToString('HH:mm:ss')) UTC ---"
+  if($script:markets -eq $null -or ((Get-Date)-$script:marketsTs).TotalHours -ge 6){ Update-Markets $false }
+  $fees=@{BINANCE=$FB;MEXC=$FM;BYBIT=$FY;OKX=$FO}
   $live=@()
-  foreach($sym in $SYMS){
+  foreach($grp in $script:markets.groups){
+    $sym=$grp.normalized
     if($last.ContainsKey($sym) -and ((Get-Date)-$last[$sym]).TotalSeconds -lt $COOL){continue}
-    $s=$sym.Replace("/",""); $oid=$sym.Replace("/","-"); $b=$null; $m=$null; $yB=$null; $yA=$null; $oB=$null; $oA=$null
-    try{$b=Invoke-RestMethod "https://api.binance.com/api/v3/ticker/bookTicker?symbol=$s" -TimeoutSec 10; $script:exStat.BINANCE.ok++}catch{$script:exStat.BINANCE.fail++}
-    try{$m=Invoke-RestMethod "https://api.mexc.com/api/v3/ticker/bookTicker?symbol=$s" -TimeoutSec 10; $script:exStat.MEXC.ok++}catch{$script:exStat.MEXC.fail++}
-    try{ $y=Invoke-RestMethod "https://api.bybit.com/v5/market/tickers?category=spot&symbol=$s" -TimeoutSec 10; $t=$y.result.list[0]; $yB=[double]$t.bid1Price; $yA=[double]$t.ask1Price; $script:exStat.BYBIT.ok++ }catch{$script:exStat.BYBIT.fail++}
-    try{ $o=Invoke-RestMethod "https://www.okx.com/api/v5/market/ticker?instId=$oid" -TimeoutSec 10; $d=$o.data[0]; $oB=[double]$d.bidPx; $oA=[double]$d.askPx; $script:exStat.OKX.ok++ }catch{$script:exStat.OKX.fail++}
-    if(-not $b -or -not $m -or -not $yB -or $yA -le 0 -or -not $oB -or $oA -le 0){continue}
-    $bA=[double]$b.askPrice; $bB=[double]$b.bidPrice; $mA=[double]$m.askPrice; $mB=[double]$m.bidPrice
-    if($bA -le 0 -or $mA -le 0){continue}
-    $px=@{BINANCE=@{bid=$bB;ask=$bA;fee=$FB};MEXC=@{bid=$mB;ask=$mA;fee=$FM};BYBIT=@{bid=$yB;ask=$yA;fee=$FY};OKX=@{bid=$oB;ask=$oA;fee=$FO}}
+    $pxn=Get-PricesNative $grp.members
+    foreach($ex in $grp.members.Keys){ if($pxn.ContainsKey($ex)){ $script:exStat[$ex].ok++ } else { $script:exStat[$ex].fail++ } }
+    $px=@{}
+    foreach($ex in $pxn.Keys){ if($pxn[$ex].ask -gt 0 -and $pxn[$ex].bid -gt 0){ $px[$ex]=@{bid=[double]$pxn[$ex].bid; ask=[double]$pxn[$ex].ask; fee=$fees[$ex]} } }
+    $row=[ordered]@{symbol=$sym; base=$grp.base; quote=$grp.quote; principal=($script:markets.principal[$grp.base] -eq $grp.quote)}
+    foreach($ex in @("BINANCE","MEXC","BYBIT","OKX")){
+      $k=$ex.ToLower()
+      if($px.ContainsKey($ex)){ $row["${k}_bid"]=$px[$ex].bid; $row["${k}_ask"]=$px[$ex].ask }
+      else { $row["${k}_bid"]=$null; $row["${k}_ask"]=$null }
+    }
     $bestN=-999; $bx=""; $sx=""; $bp=0; $sp=0; $gross=0
     foreach($be in $px.Keys){ foreach($se in $px.Keys){ if($be -eq $se){continue}
       $g=(($px[$se].bid-$px[$be].ask)/$px[$be].ask*100); $nn=Compute-Net $px[$be].ask $px[$se].bid $px[$be].fee $px[$se].fee 0 0
       if($nn -gt $bestN){ $bestN=$nn; $bx=$be; $sx=$se; $bp=$px[$be].ask; $sp=$px[$se].bid; $gross=$g; $fb=$px[$be].fee; $fs=$px[$se].fee }
     }}
-    $live+= [ordered]@{symbol=$sym; binance_bid=$bB; binance_ask=$bA; mexc_bid=$mB; mexc_ask=$mA; bybit_bid=$yB; bybit_ask=$yA; okx_bid=$oB; okx_ask=$oA; best=[Math]::Round($bestN,4); best_buy=$bx; best_sell=$sx}
-    if($bestN -ge $MIN){
+    if($px.Count -ge 2){ $row.best=[Math]::Round($bestN,4); $row.best_buy=$bx; $row.best_sell=$sx }
+    else { $row.best=$null; $row.best_buy=$null; $row.best_sell=$null }
+    $live+=$row
+    if($px.Count -ge 2 -and $bestN -ge $MIN){
       $amt=$SIZE/$bp; $profit=($amt*(1-$fb/100)*$sp*(1-$fs/100))-$SIZE
-      $a=[ordered]@{symbol=$sym;buy_exchange=$bx;sell_exchange=$sx;buy_price=[Math]::Round($bp,8);sell_price=[Math]::Round($sp,8);gross_spread=[Math]::Round($gross,2);net_spread=[Math]::Round($bestN,2);estimated_profit=[Math]::Round($profit,2);timestamp=([DateTime]::UtcNow.ToString("o"));pair_urls=@{buy=(Get-TradeUrl $bx $sym);sell=(Get-TradeUrl $sx $sym)}}
+      $a=[ordered]@{symbol=$sym; base=$grp.base; quote=$grp.quote; buy_exchange=$bx; sell_exchange=$sx; buy_native=$grp.members[$bx]; sell_native=$grp.members[$sx]; buy_price=[Math]::Round($bp,8);sell_price=[Math]::Round($sp,8);gross_spread=[Math]::Round($gross,2);net_spread=[Math]::Round($bestN,2);estimated_profit=[Math]::Round($profit,2);timestamp=([DateTime]::UtcNow.ToString("o"));pair_urls=@{buy=(Get-TradeUrl $bx $sym);sell=(Get-TradeUrl $sx $sym)}}
       Write-Host "  OPORTUNIDAD $sym | $bx -> $sx | Neto $([Math]::Round($bestN,2))% | +`$$([Math]::Round($profit,2))" -ForegroundColor Green
       Save-Local $a; $last[$sym]=Get-Date
     }
@@ -78,10 +97,12 @@ do{
     $lastDepth=Get-Date; $depth=@(); $books=@()
     $cfg=@{MIN=$MIN; SIZE=$SIZE; THIN=$THIN; SAFE=$SAFE; EXITMIN=$EXITMIN; PERSIST=$PERSIST; MF=@{BINANCE=$MFB;MEXC=$MFM;BYBIT=$MFY;OKX=$MFO}; TF=@{BINANCE=$FB;MEXC=$FM;BYBIT=$FY;OKX=$FO}}
     $now=Get-Date; $trN=0; $trO=0
-    foreach($sym in $SYMS){
-      $bk=Get-DepthAll $sym 20
+    foreach($grp in $script:markets.groups){
+      $sym=$grp.normalized
+      $bk=Get-DepthAllNative $grp.members 20
       if($bk.Count -lt 2){ continue }
-      $ev=Eval-Depth $sym $bk $cfg $hist $now ${function:Get-TradeUrl}
+      $ginfo=[ordered]@{base=$grp.base; quote=$grp.quote; normalized=$grp.normalized; natives=$grp.members}
+      $ev=Eval-Depth $sym $bk $cfg $hist $now ${function:Get-TradeUrl} $ginfo
       $books+=$ev.booksRow; $trN+=$ev.tradesN; $trO+=$ev.tradesOk
       foreach($sig in $ev.signals){
         $depth+=$sig
