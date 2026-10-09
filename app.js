@@ -101,8 +101,8 @@ async function fetchDepth(){
     let html='';
     for(const s of rows.slice(0,15)){
       const cls=s.fill_suspected?'arb':'';
-      const bl=s.buy_lvl||1, sl=s.sell_lvl||1;
-      const comboTxt='Mejor combo: compra <b>ASK'+bl+' '+s.buy_exchange+' '+(s.buy_price||s.entry_price)+'</b> -&gt; vende <b>BID'+sl+' '+s.sell_exchange+' '+s.sell_price+'</b>'+((bl>1||sl>1)?' (usa nivel 2 de cola)':' (nivel 1)');
+      const mkt=(s.mkt_net_lvl1!=null)?' Mercado directo ASK-&gt;BID daria <b>'+s.mkt_net_lvl1+'%</b>'+(s.mkt_net_lvl2!=null?' (nivel 2: '+s.mkt_net_lvl2+'%)':''):'';
+      const comboTxt='Tu flujo: entra en <b>COLA-BID '+s.buy_exchange+' '+(s.buy_price||s.entry_price)+'</b> -&gt; vende <b>BID '+s.sell_exchange+' '+s.sell_price+'</b> = <b>'+Number(s.net_if_filled).toFixed(2)+'%</b>'+mkt;
       const nxt=(s.ask_next!=null)?'<div class="combo">Siguiente ASK en cola: <b>'+s.ask_next+'</b> ('+s.ask_next_vol_usdt+' USDT)</div>':'';
       html+='<div class="mkt '+cls+'"><div class="mkt-head"><span class="mkt-sym">'+s.symbol+' - '+s.buy_exchange+' -&gt; '+s.sell_exchange+'</span><span class="mkt-net '+(s.fill_suspected?'yes':'no')+'">'+(s.fill_suspected?'POSIBLE FILL':Number(s.net_if_filled).toFixed(2)+'% si entra')+'</span></div>'
       +'<div class="combo">Entrada limite sugerida <b>'+s.entry_price+'</b> (ask fino '+s.ask_vol_usdt+' USDT) - neto estimado <b>'+s.net_if_filled+'%</b></div>'+'<div class="combo">'+comboTxt+'</div>'+nxt+'</div>';
