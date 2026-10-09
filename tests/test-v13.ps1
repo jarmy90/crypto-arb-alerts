@@ -3,6 +3,7 @@
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 . (Join-Path (Get-Location) "depth-common.ps1")
+. (Join-Path (Get-Location) "markets-common.ps1")
 
 $global:fails = 0
 $global:passes = 0
@@ -111,6 +112,50 @@ $newNet = Compute-Net 99.5 $w.vwap 0.05 0.05 ([Math]::Round((101-$w.vwap)/101*10
 Check "T10-recalc" ($newNet -ne $oldNet) "old=$oldNet new=$([Math]::Round($newNet,4))"
 $cls = if($newNet -ge $cfg.MIN){ "SALIR AHORA" } elseif($newNet -gt 0){ "VIGILAR" } else{ "SALIDA POSIBLE EN PERDIDA" }
 Check "T10-clase" ($cls -ne $null -and $cls -ne "") $cls
+
+# T11-T15: misma cotizacion, grupos dinamicos (fixtures, sin red)
+function CatFix($entries){
+  $m=@{}
+  foreach($e in $entries){ $m[$e.native]=@{base=$e.base; quote=$e.quote; ok=$e.ok; native=$e.native; suspended=(-not $e.ok); status=$e.status} }
+  return $m
+}
+# T11: misma cotizacion BTC/USDC en dos exchanges -> comparacion permitida
+$cat11=@{BINANCE=(CatFix @(@{base='BTC';quote='USDC';ok=$true;native='BTCUSDC';status='TRADING'})); MEXC=(CatFix @(@{base='BTC';quote='USDC';ok=$true;native='BTCUSDC';status='1'}))}
+$g11=Build-Groups $cat11 @('BTC') @('USDC','USDT')
+$gu=@($g11.groups | Where-Object { $_.normalized -eq 'BTC/USDC' })[0]
+Check "T11-misma-quote" ($gu.members.Count -eq 2) "miembros=$($gu.members.Count)"
+$cfg = CfgBase
+$bk11=@{BINANCE=(MkBook 100 10 99.0 10); MEXC=(MkBook 90 10 89.0 10)}
+$h=@{}
+$r11=Eval-Depth "BTC/USDC" $bk11 $cfg $h ([DateTime]::UtcNow) $tu
+Check "T11-senal" ($r11.signals.Count -eq 2) "senales=$($r11.signals.Count)"
+
+# T12: distinta cotizacion -> bloqueada (grupos separados, sin mezcla)
+$cat12=@{BINANCE=(CatFix @(@{base='BTC';quote='USDC';ok=$true;native='BTCUSDC';status='TRADING'})); MEXC=(CatFix @(@{base='BTC';quote='USDT';ok=$true;native='BTCUSDT';status='1'}))}
+$g12=Build-Groups $cat12 @('BTC') @('USDC','USDT')
+$mix=@($g12.groups | Where-Object { $_.members.Count -ge 2 })
+Check "T12-bloqueada" ($mix.Count -eq 0) "grupos-mezclados=$($mix.Count)"
+
+# T13: par no disponible/no operable -> sin depth, sin senal, NO DISPONIBLE
+$cat13=@{BINANCE=(CatFix @(@{base='BTC';quote='USDT';ok=$false;native='BTCUSDT';status='BREAK'})); MEXC=(CatFix @(@{base='BTC';quote='USDT';ok=$true;native='BTCUSDT';status='1'}))}
+$g13=Build-Groups $cat13 @('BTC') @('USDT')
+$gu13=@($g13.groups | Where-Object { $_.normalized -eq 'BTC/USDT' })[0]
+Check "T13-excluido" ($gu13.members.Count -eq 1 -and -not $gu13.members.ContainsKey('BINANCE')) "miembros=$($gu13.members.Count)"
+Check "T13-suspendido" ((@($g13.suspended | Where-Object { $_.exchange -eq 'BINANCE' })).Count -eq 1) "susp=$($g13.suspended.Count)"
+
+# T14: interseccion dinamica USDCx4 / USDTx3 -> dos grupos independientes
+$cat14=@{EX1=(CatFix @(@{base='BTC';quote='USDC';ok=$true;native='X';status='a'},@{base='BTC';quote='USDT';ok=$true;native='Y';status='a'})); EX2=(CatFix @(@{base='BTC';quote='USDC';ok=$true;native='X';status='a'},@{base='BTC';quote='USDT';ok=$true;native='Y';status='a'})); EX3=(CatFix @(@{base='BTC';quote='USDC';ok=$true;native='X';status='a'},@{base='BTC';quote='USDT';ok=$true;native='Y';status='a'})); EX4=(CatFix @(@{base='BTC';quote='USDC';ok=$true;native='X';status='a'}))}
+$g14=Build-Groups $cat14 @('BTC') @('USDC','USDT')
+$u4=@($g14.groups | Where-Object { $_.normalized -eq 'BTC/USDC' })[0]
+$u3=@($g14.groups | Where-Object { $_.normalized -eq 'BTC/USDT' })[0]
+Check "T14-grupos" ($u4.members.Count -eq 4 -and $u3.members.Count -eq 3) "usdc=$($u4.members.Count) usdt=$($u3.members.Count)"
+Check "T14-sin-mezcla" ($u4.quote -eq 'USDC' -and $u3.quote -eq 'USDT') "quotes separadas"
+
+# T15: par suspendido -> excluido y marcado SUSPENDIDO
+$cat15=@{BINANCE=(CatFix @(@{base='BTC';quote='USDT';ok=$false;native='BTCUSDT';status='HALT'}))}
+$g15=Build-Groups $cat15 @('BTC') @('USDT')
+$gu15=@($g15.groups | Where-Object { $_.normalized -eq 'BTC/USDT' })[0]
+Check "T15-suspendido" ($gu15.members.Count -eq 0 -and (@($g15.suspended | Where-Object { $_.status -eq 'HALT' })).Count -eq 1) "miembros=0 susp=HALT"
 
 Write-Output "----"
 Write-Output "PASS=$global:passes FAIL=$global:fails"
