@@ -4,41 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Arbitraje crypto en vivo entre Binance, MEXC y Bybit">
-    <title>Crypto Arbitrage Detector | Live v3</title>
-    <link rel="stylesheet" href="style.css?v=3">
+    <title>Crypto Arbitrage Detector | Live v4 compact</title>
+    <link rel="stylesheet" href="style.css?v=4">
     <style>
-    .watch{background:#1a1f2e;border:1px solid #374151;border-radius:1rem;padding:1.25rem;margin-bottom:2rem}
-    .pair-chip{display:inline-block;background:#242b3d;border:1px solid #374151;border-radius:.5rem;padding:.2rem .6rem;margin:.2rem;font-size:.85rem}
-    .cfg{color:#9ca3af;font-size:.85rem;margin-top:.75rem}
+    .watch{background:#1a1f2e;border:1px solid #374151;border-radius:1rem;padding:1rem;margin-bottom:1.5rem}
+    .pair-chip{display:inline-block;background:#242b3d;border:1px solid #374151;border-radius:.5rem;padding:.15rem .5rem;margin:.15rem;font-size:.78rem}
+    .cfg{color:#9ca3af;font-size:.8rem;margin-top:.6rem}
     .alert-card a{color:#3b82f6;font-size:.8rem;text-decoration:none}
     .ver{color:#10b981;font-size:.8rem;font-weight:700}
-    .mkt{background:#242b3d;border:1px solid #374151;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem}
-    .mkt.arb{border-color:#10b981;box-shadow:0 0 0 1px #10b981}
-    .mkt-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem}
-    .mkt-sym{font-weight:700;font-size:1.05rem}
-    .mkt-net{font-weight:700;font-size:.85rem;padding:.15rem .6rem;border-radius:.5rem}
-    .mkt-net.no{background:#374151;color:#9ca3af}
-    .mkt-net.yes{background:#10b981;color:#fff;animation:pulse 2s infinite}
-    .ex-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem}
-    .ex{background:#1a1f2e;border:1px solid #374151;border-radius:.5rem;padding:.5rem;text-align:center}
-    .ex-name{font-size:.75rem;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em}
-    .cell{margin-top:.3rem;padding:.3rem;border-radius:.4rem;border:1px solid transparent}
-    .cell .lbl{font-size:.7rem;color:#6b7280}
-    .cell .val{font-weight:700;font-size:.9rem}
-    .cell.best-buy{border-color:#f59e0b;background:rgba(245,158,11,.12)}
-    .cell.best-sell{border-color:#f59e0b;background:rgba(245,158,11,.12)}
-    .mkt.arb .cell.best-buy,.mkt.arb .cell.best-sell{border-color:#10b981;background:rgba(16,185,129,.18)}
-    .mkt.arb .cell.best-buy .val,.mkt.arb .cell.best-sell .val{color:#10b981}
+    .live-table{width:100%;border-collapse:collapse;font-size:.78rem}
+    .live-table th,.live-table td{padding:.3rem .4rem;border-bottom:1px solid #374151;text-align:right;white-space:nowrap}
+    .live-table th{background:#242b3d;color:#9ca3af;font-size:.7rem;position:sticky;top:0}
+    .live-table td.sym,.live-table th:first-child{text-align:left;font-weight:700}
+    .live-table td.bb{background:rgba(245,158,11,.16);color:#fbbf24;font-weight:700}
+    .live-table td.bs{background:rgba(245,158,11,.16);color:#fbbf24;font-weight:700}
+    .live-table tr.arb td.bb,.live-table tr.arb td.bs{background:rgba(16,185,129,.22);color:#10b981}
+    .live-table td.net{font-weight:700;color:#9ca3af}
+    .live-table td.net.yes{color:#10b981}
     .combo{font-size:.78rem;color:#9ca3af;margin-top:.4rem}
-    .combo b{color:#e7eaf0}
-    @media(max-width:700px){.ex-grid{grid-template-columns:1fr}}
     </style>
 </head>
 <body>
     <div class="container">
         <header class="header">
             <div class="header-content">
-                <h1 class="title"><span class="icon">📊</span>Crypto Arbitrage Detector <span class="ver">v3 · 3 exchanges</span></h1>
+                <h1 class="title"><span class="icon">📊</span>Crypto Arbitrage Detector <span class="ver">v4 compact</span></h1>
                 <p class="subtitle">Solo detección entre <b>Binance</b> ↔ <b>MEXC</b> ↔ <b>Bybit</b> (spot). No ejecuta trades.</p>
             </div>
             <div class="status">
@@ -47,7 +37,7 @@
             </div>
         </header>
         <div class="watch">
-            <b>🔴 Tabla live por mercado — 6 valores c/u (<span id="liveTime">—</span>):</b>
+            <b>🔴 DOM compacto — 15 mercados de un vistazo (<span id="liveTime">—</span>):</b>
             <div class="cfg">Verde = mejor ASK (compra más barata) y mejor BID (venta más cara). Tarjeta <b style="color:#10b981">verde</b> = hay arbitraje ≥0.40% neto. <b style="color:#f59e0b">Amarillo</b> = mejor combinación actual aunque no llegue al umbral.</div>
             <div id="liveBox" style="margin-top:.75rem">cargando...</div>
         </div>
