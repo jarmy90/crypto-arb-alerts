@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Arbitraje crypto entre Binance, MEXC, Bybit y OKX. Solo con bot activo.">
-    <title>Crypto Arbitrage Detector | v13.1</title>
-    <link rel="stylesheet" href="style.css?v=13.1">
+    <title>Crypto Arbitrage Detector | v13.2</title>
+    <link rel="stylesheet" href="style.css?v=13.2">
     <style>
     .watch{background:#1a1f2e;border:1px solid #374151;border-radius:1rem;padding:1rem;margin-bottom:1.5rem;position:relative}
     .pair-chip{display:inline-block;background:#242b3d;border:1px solid #374151;border-radius:.5rem;padding:.15rem .5rem;margin:.15rem;font-size:.78rem}
@@ -38,6 +38,12 @@
     .combo b{color:#e7eaf0}
     .combo button,.mkt button{background:#3b82f6;color:#fff;border:0;border-radius:.4rem;padding:.3rem .6rem;margin:.15rem .15rem 0 0;cursor:pointer;font-size:.78rem}
     .combo button:disabled,.mkt button:disabled{background:#4b5563;cursor:not-allowed}
+    .live-table td.na{background:#1f2937;color:#6b7280;font-size:.72rem;text-align:center}
+    .tabs{display:flex;gap:.5rem;margin-bottom:1rem}
+    .tabs button{background:#242b3d;color:#9ca3af;border:1px solid #374151;border-radius:.5rem;padding:.4rem 1rem;cursor:pointer;font-size:.9rem}
+    .tabs button.on{background:#3b82f6;color:#fff}
+    #quoteSel button{background:#242b3d;color:#9ca3af;border:1px solid #374151;border-radius:.4rem;padding:.25rem .7rem;margin-right:.3rem;cursor:pointer;font-size:.8rem}
+    #quoteSel button.on{background:#10b981;color:#fff}
     .tabs{display:flex;gap:.5rem;margin-bottom:1rem}
     .tabs button{background:#242b3d;color:#9ca3af;border:1px solid #374151;border-radius:.5rem;padding:.4rem 1rem;cursor:pointer;font-size:.9rem}
     .tabs button.on{background:#3b82f6;color:#fff}
@@ -48,7 +54,7 @@
     <div class="container">
         <header class="header">
             <div class="header-content">
-                <h1 class="title"><span class="icon">[CHART]</span>Crypto Arbitrage Detector <span class="ver">v13.1 · 4 exchanges</span> <span id="sysBadge" class="sysbadge"></span></h1>
+                <h1 class="title"><span class="icon">[CHART]</span>Crypto Arbitrage Detector <span class="ver">v13.2 · 4 exchanges</span> <span id="sysBadge" class="sysbadge"></span></h1>
                 <p class="subtitle">Solo deteccion entre <b>Binance</b> - <b>MEXC</b> - <b>Bybit</b> - <b>OKX</b> (spot). No ejecuta trades.</p>
                 <p class="cfg">Los precios solo se actualizan mientras el bot esta ejecutandose en un PC. Recargar la pagina no genera datos nuevos.</p>
             </div>
@@ -64,6 +70,7 @@
         <div id="tabLive">
         <div class="watch" id="priceWatch">
             <b><span id="priceTitle">Tabla de precios</span> <span id="priceAge" class="cfg"></span></b>
+            <div class="cfg">Mercado: <span id="quoteSel"></span> (por defecto grupos con 2+ exchanges)</div>
             <div class="cfg">Naranja = mejor ASK (compra mas barata) · Azul = mejor BID (venta mas cara). Fila verde = arbitraje igual o mayor a 0.40% neto.</div>
             <div id="liveBox" style="margin-top:.75rem">cargando...</div>
             <div id="tableOverlay"></div>
@@ -107,6 +114,7 @@
         </div>
         <footer class="footer"><p>Solo deteccion, no es consejo financiero.</p><p>Compra en ASK, vende en BID · Neto = (bid-ask)/ask x 100 - fees · El bot debe estar activo para datos actuales.</p></footer>
     </div>
-    <script src="app.js?v=13.1"></script>
+    <script src="app.js?v=13.2"></script>
 </body>
 </html>
+
