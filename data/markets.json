@@ -1,0 +1,360 @@
+{
+    "updated":  "2026-10-09T12:54:56.2159703Z",
+    "ver":  "13.2",
+    "quotes":  [
+                   "USDT",
+                   "USDC"
+               ],
+    "principal":  {
+                      "BNB":  "USDC",
+                      "ATOM":  "USDC",
+                      "UNI":  "USDC",
+                      "LTC":  "USDC",
+                      "SOL":  "USDC",
+                      "POL":  "USDC",
+                      "XRP":  "USDC",
+                      "AVAX":  "USDC",
+                      "NEAR":  "USDC",
+                      "DOGE":  "USDC",
+                      "ADA":  "USDC",
+                      "ETH":  "USDC",
+                      "LINK":  "USDC",
+                      "DOT":  "USDC",
+                      "BTC":  "USDC"
+                  },
+    "groups":  [
+                   {
+                       "base":  "ADA",
+                       "quote":  "USDT",
+                       "normalized":  "ADA/USDT",
+                       "members":  {
+                                       "OKX":  "ADA-USDT",
+                                       "BINANCE":  "ADAUSDT",
+                                       "BYBIT":  "ADAUSDT",
+                                       "MEXC":  "ADAUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "ADA",
+                       "quote":  "USDC",
+                       "normalized":  "ADA/USDC",
+                       "members":  {
+                                       "OKX":  "ADA-USDC",
+                                       "BINANCE":  "ADAUSDC",
+                                       "BYBIT":  "ADAUSDC",
+                                       "MEXC":  "ADAUSDC"
+                                   }
+                   },
+                   {
+                       "base":  "ATOM",
+                       "quote":  "USDT",
+                       "normalized":  "ATOM/USDT",
+                       "members":  {
+                                       "OKX":  "ATOM-USDT",
+                                       "BINANCE":  "ATOMUSDT",
+                                       "BYBIT":  "ATOMUSDT",
+                                       "MEXC":  "ATOMUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "ATOM",
+                       "quote":  "USDC",
+                       "normalized":  "ATOM/USDC",
+                       "members":  {
+                                       "OKX":  "ATOM-USDC",
+                                       "BINANCE":  "ATOMUSDC",
+                                       "BYBIT":  "ATOMUSDC",
+                                       "MEXC":  "ATOMUSDC"
+                                   }
+                   },
+                   {
+                       "base":  "AVAX",
+                       "quote":  "USDT",
+                       "normalized":  "AVAX/USDT",
+                       "members":  {
+                                       "OKX":  "AVAX-USDT",
+                                       "BINANCE":  "AVAXUSDT",
+                                       "BYBIT":  "AVAXUSDT",
+                                       "MEXC":  "AVAXUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "AVAX",
+                       "quote":  "USDC",
+                       "normalized":  "AVAX/USDC",
+                       "members":  {
+                                       "OKX":  "AVAX-USDC",
+                                       "BINANCE":  "AVAXUSDC",
+                                       "BYBIT":  "AVAXUSDC",
+                                       "MEXC":  "AVAXUSDC"
+                                   }
+                   },
+                   {
+                       "base":  "BNB",
+                       "quote":  "USDT",
+                       "normalized":  "BNB/USDT",
+                       "members":  {
+                                       "OKX":  "BNB-USDT",
+                                       "BINANCE":  "BNBUSDT",
+                                       "BYBIT":  "BNBUSDT",
+                                       "MEXC":  "BNBUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "BNB",
+                       "quote":  "USDC",
+                       "normalized":  "BNB/USDC",
+                       "members":  {
+                                       "OKX":  "BNB-USDC",
+                                       "BINANCE":  "BNBUSDC",
+                                       "BYBIT":  "BNBUSDC",
+                                       "MEXC":  "BNBUSDC"
+                                   }
+                   },
+                   {
+                       "base":  "BTC",
+                       "quote":  "USDT",
+                       "normalized":  "BTC/USDT",
+                       "members":  {
+                                       "OKX":  "BTC-USDT",
+                                       "BINANCE":  "BTCUSDT",
+                                       "BYBIT":  "BTCUSDT",
+                                       "MEXC":  "BTCUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "BTC",
+                       "quote":  "USDC",
+                       "normalized":  "BTC/USDC",
+                       "members":  {
+                                       "OKX":  "BTC-USDC",
+                                       "BINANCE":  "BTCUSDC",
+                                       "BYBIT":  "BTCUSDC",
+                                       "MEXC":  "BTCUSDC"
+                                   }
+                   },
+                   {
+                       "base":  "DOGE",
+                       "quote":  "USDT",
+                       "normalized":  "DOGE/USDT",
+                       "members":  {
+                                       "OKX":  "DOGE-USDT",
+                                       "BINANCE":  "DOGEUSDT",
+                                       "BYBIT":  "DOGEUSDT",
+                                       "MEXC":  "DOGEUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "DOGE",
+                       "quote":  "USDC",
+                       "normalized":  "DOGE/USDC",
+                       "members":  {
+                                       "OKX":  "DOGE-USDC",
+                                       "BINANCE":  "DOGEUSDC",
+                                       "BYBIT":  "DOGEUSDC",
+                                       "MEXC":  "DOGEUSDC"
+                                   }
+                   },
+                   {
+                       "base":  "DOT",
+                       "quote":  "USDT",
+                       "normalized":  "DOT/USDT",
+                       "members":  {
+                                       "OKX":  "DOT-USDT",
+                                       "BINANCE":  "DOTUSDT",
+                                       "BYBIT":  "DOTUSDT",
+                                       "MEXC":  "DOTUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "DOT",
+                       "quote":  "USDC",
+                       "normalized":  "DOT/USDC",
+                       "members":  {
+                                       "OKX":  "DOT-USDC",
+                                       "BINANCE":  "DOTUSDC",
+                                       "BYBIT":  "DOTUSDC",
+                                       "MEXC":  "DOTUSDC"
+                                   }
+                   },
+                   {
+                       "base":  "ETH",
+                       "quote":  "USDT",
+                       "normalized":  "ETH/USDT",
+                       "members":  {
+                                       "OKX":  "ETH-USDT",
+                                       "BINANCE":  "ETHUSDT",
+                                       "BYBIT":  "ETHUSDT",
+                                       "MEXC":  "ETHUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "ETH",
+                       "quote":  "USDC",
+                       "normalized":  "ETH/USDC",
+                       "members":  {
+                                       "OKX":  "ETH-USDC",
+                                       "BINANCE":  "ETHUSDC",
+                                       "BYBIT":  "ETHUSDC",
+                                       "MEXC":  "ETHUSDC"
+                                   }
+                   },
+                   {
+                       "base":  "LINK",
+                       "quote":  "USDT",
+                       "normalized":  "LINK/USDT",
+                       "members":  {
+                                       "OKX":  "LINK-USDT",
+                                       "BINANCE":  "LINKUSDT",
+                                       "BYBIT":  "LINKUSDT",
+                                       "MEXC":  "LINKUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "LINK",
+                       "quote":  "USDC",
+                       "normalized":  "LINK/USDC",
+                       "members":  {
+                                       "OKX":  "LINK-USDC",
+                                       "BINANCE":  "LINKUSDC",
+                                       "BYBIT":  "LINKUSDC",
+                                       "MEXC":  "LINKUSDC"
+                                   }
+                   },
+                   {
+                       "base":  "LTC",
+                       "quote":  "USDT",
+                       "normalized":  "LTC/USDT",
+                       "members":  {
+                                       "OKX":  "LTC-USDT",
+                                       "BINANCE":  "LTCUSDT",
+                                       "BYBIT":  "LTCUSDT",
+                                       "MEXC":  "LTCUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "LTC",
+                       "quote":  "USDC",
+                       "normalized":  "LTC/USDC",
+                       "members":  {
+                                       "OKX":  "LTC-USDC",
+                                       "BINANCE":  "LTCUSDC",
+                                       "BYBIT":  "LTCUSDC",
+                                       "MEXC":  "LTCUSDC"
+                                   }
+                   },
+                   {
+                       "base":  "NEAR",
+                       "quote":  "USDT",
+                       "normalized":  "NEAR/USDT",
+                       "members":  {
+                                       "OKX":  "NEAR-USDT",
+                                       "BINANCE":  "NEARUSDT",
+                                       "BYBIT":  "NEARUSDT",
+                                       "MEXC":  "NEARUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "NEAR",
+                       "quote":  "USDC",
+                       "normalized":  "NEAR/USDC",
+                       "members":  {
+                                       "OKX":  "NEAR-USDC",
+                                       "BINANCE":  "NEARUSDC",
+                                       "BYBIT":  "NEARUSDC",
+                                       "MEXC":  "NEARUSDC"
+                                   }
+                   },
+                   {
+                       "base":  "POL",
+                       "quote":  "USDT",
+                       "normalized":  "POL/USDT",
+                       "members":  {
+                                       "OKX":  "POL-USDT",
+                                       "BINANCE":  "POLUSDT",
+                                       "BYBIT":  "POLUSDT",
+                                       "MEXC":  "POLUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "POL",
+                       "quote":  "USDC",
+                       "normalized":  "POL/USDC",
+                       "members":  {
+                                       "OKX":  "POL-USDC",
+                                       "BINANCE":  "POLUSDC",
+                                       "BYBIT":  "POLUSDC",
+                                       "MEXC":  "POLUSDC"
+                                   }
+                   },
+                   {
+                       "base":  "SOL",
+                       "quote":  "USDT",
+                       "normalized":  "SOL/USDT",
+                       "members":  {
+                                       "OKX":  "SOL-USDT",
+                                       "BINANCE":  "SOLUSDT",
+                                       "BYBIT":  "SOLUSDT",
+                                       "MEXC":  "SOLUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "SOL",
+                       "quote":  "USDC",
+                       "normalized":  "SOL/USDC",
+                       "members":  {
+                                       "OKX":  "SOL-USDC",
+                                       "BINANCE":  "SOLUSDC",
+                                       "BYBIT":  "SOLUSDC",
+                                       "MEXC":  "SOLUSDC"
+                                   }
+                   },
+                   {
+                       "base":  "UNI",
+                       "quote":  "USDT",
+                       "normalized":  "UNI/USDT",
+                       "members":  {
+                                       "OKX":  "UNI-USDT",
+                                       "BINANCE":  "UNIUSDT",
+                                       "BYBIT":  "UNIUSDT",
+                                       "MEXC":  "UNIUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "UNI",
+                       "quote":  "USDC",
+                       "normalized":  "UNI/USDC",
+                       "members":  {
+                                       "OKX":  "UNI-USDC",
+                                       "BINANCE":  "UNIUSDC",
+                                       "BYBIT":  "UNIUSDC",
+                                       "MEXC":  "UNIUSDC"
+                                   }
+                   },
+                   {
+                       "base":  "XRP",
+                       "quote":  "USDT",
+                       "normalized":  "XRP/USDT",
+                       "members":  {
+                                       "OKX":  "XRP-USDT",
+                                       "BINANCE":  "XRPUSDT",
+                                       "BYBIT":  "XRPUSDT",
+                                       "MEXC":  "XRPUSDT"
+                                   }
+                   },
+                   {
+                       "base":  "XRP",
+                       "quote":  "USDC",
+                       "normalized":  "XRP/USDC",
+                       "members":  {
+                                       "OKX":  "XRP-USDC",
+                                       "BINANCE":  "XRPUSDC",
+                                       "BYBIT":  "XRPUSDC",
+                                       "MEXC":  "XRPUSDC"
+                                   }
+                   }
+               ],
+    "suspended":  [
+
+                  ]
+}
