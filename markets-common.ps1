@@ -1,6 +1,6 @@
 # markets-common.ps1 v13.2 - catalogos spot y grupos base/quote (dot-source desde los bots).
 # Regla: solo comparar la misma quote. Nunca mezclar USDC con USDT.
-$MARKETS_VERSION = "13.2"
+$MARKETS_VERSION = "13.3"
 
 function Native-Symbol($ex, $base, $quote){
   if($ex -eq "OKX"){ return "$base-$quote" }
@@ -130,3 +130,4 @@ function Get-DepthAllNative($natives, $DLEN){
   }catch{} }
   return $bk
 }
+
