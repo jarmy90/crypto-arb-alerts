@@ -92,26 +92,56 @@ async function fetchAlerts(){
   }catch(e){ console.error(e); if(lastOk){ updateStatus('active','Conectado - esperando datos...'); } else showError('No pude cargar alerts.json: '+e.message); }
   finally{ isLoading=false; }
 }
-elements.refreshBtn.addEventListener('click',()=>{fetchAlerts();fetchLive();fetchDepth();});
-const STATE_COLOR={OBSERVAR:'warn',PREPARAR:'prep','POSIBLE FILL':'yes',RETIRAR:'bad'};
+elements.refreshBtn.addEventListener('click',()=>{fetchAlerts();fetchLive();fetchDepth();renderVersion();});
+const WEB_VERSION='13';
+const STALE_S=90, DEAD_S=300;
+const STATE_COLOR={OBSERVAR:'warn',PREPARAR:'prep','NIVEL REDUCIDO':'warn','POSIBLE EJECUCION':'prep','POSIBLE FILL PARCIAL':'prep','POSIBLE FILL':'yes',RETIRAR:'bad'};
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 function loadOrders(){ try{ return JSON.parse(localStorage.getItem('arb_orders')||'[]'); }catch(e){ return []; } }
 function saveOrders(o){ localStorage.setItem('arb_orders',JSON.stringify(o)); }
-function livePrice(sym, ex, side){
-  const L=window._liveRows||{};
-  const r=L[sym]; if(!r) return null;
-  const k=ex.toLowerCase()+'_'+side;
-  return r[k]!=null?Number(r[k]):null;
+// Funcion UNICA de neto en la web (misma formula que el bot): buy, sell, maker, taker, slip, margen.
+function computeNet(buy,sell,makerFee,takerFee,slip,safe){
+  buy=Number(buy); sell=Number(sell);
+  if(!(buy>0&&sell>0)) return null;
+  return ((sell/buy)-1)*100-makerFee-takerFee-(slip||0)-(safe||0);
 }
+function bookLevels(sym,ex,side){
+  const B=window._books||{}; const r=B[sym]; if(!r) return null;
+  const e=r[ex.toLowerCase()]; if(!e) return null;
+  return (side==='ask'?e.asks:e.bids)||null;
+}
+function bookL1(sym,ex,side){ const lv=bookLevels(sym,ex,side); return (lv&&lv.length)?Number(lv[0].p):null; }
+function exitVwap(sym,ex,side,amount){
+  const lv=bookLevels(sym,ex,side); if(!lv||!lv.length) return {ok:false,gotU:0,lvls:0};
+  let got=0,vwap=0,n=0;
+  for(const l of lv){ const p=Number(l.p),q=Number(l.q),u=p*q; const need=amount-got; if(need<=0) break; const take=Math.min(u,need); vwap+=(take/amount)*p; got+=take; n++; }
+  if(got<amount) return {ok:false,gotU:got,lvls:n};
+  return {ok:true,vwap:vwap,gotU:got,lvls:n};
+}
+function depthAgeS(){ if(!window._depthUpdated) return null; return (Date.now()-window._depthUpdated)/1000; }
+function liveAgeS(){ if(!window._liveUpdated) return null; return (Date.now()-window._liveUpdated)/1000; }
 function takerFee(ex){ return ex==='MEXC'?WATCH.feeMexc:ex==='BYBIT'?WATCH.feeBybit:ex==='OKX'?(WATCH.feeOkx||0.10):WATCH.feeBinance; }
 function makerFee(ex){ return ex==='MEXC'?(WATCH.feeMakerMexc||0.05):ex==='BYBIT'?(WATCH.feeMakerBybit||0.10):ex==='OKX'?(WATCH.feeMakerOkx||0.10):(WATCH.feeMakerBinance||0.10); }
-function orderExitNet(o){
+// Recalculo de salida para una orden manual con el libro ACTUAL (nunca reutiliza el neto antiguo).
+function orderExitRecalc(o, amount){
+  const amt=amount||o.qtyUSDT||WATCH.tradeSize;
+  const da=depthAgeS();
+  if(da==null) return {state:'EXCHANGE DESCONECTADO', detail:'sin libro'};
+  if(da>STALE_S) return {state:'DATOS ANTIGUOS', detail:'libro de hace '+Math.round(da)+' s'};
   if(o.type==='COMPRA EN COLA'){
-    const px=livePrice(o.symbol,o.exitEx,'bid'); if(px==null) return null;
-    return ((px/o.price)-1)*100-makerFee(o.makerEx)-takerFee(o.exitEx)-0.05;
+    const w=exitVwap(o.symbol,o.exitEx,'bid',amt);
+    if(!w.ok) return {state:'LIQUIDEZ INSUFICIENTE', covered:w.gotU, need:amt};
+    const l1=bookL1(o.symbol,o.exitEx,'bid');
+    const slip=(l1-w.vwap)/l1*100;
+    const net=computeNet(o.price,w.vwap,makerFee(o.makerEx),takerFee(o.exitEx),slip,0.05);
+    return {state:'OK', net:net, vwap:w.vwap, lvls:w.lvls, slip:slip};
   }
-  const px=livePrice(o.symbol,o.exitEx,'ask'); if(px==null) return null;
-  return ((o.price/px)-1)*100-makerFee(o.makerEx)-takerFee(o.exitEx)-0.05;
+  const w=exitVwap(o.symbol,o.exitEx,'ask',amt);
+  if(!w.ok) return {state:'LIQUIDEZ INSUFICIENTE', covered:w.gotU, need:amt};
+  const l1=bookL1(o.symbol,o.exitEx,'ask');
+  const slip=(w.vwap-l1)/l1*100;
+  const net=computeNet(w.vwap,o.price,makerFee(o.makerEx),takerFee(o.exitEx),slip,0.05);
+  return {state:'OK', net:net, vwap:w.vwap, lvls:w.lvls, slip:slip};
 }
 function renderOrders(){
   const box=document.getElementById('ordersBox'); if(!box) return;
@@ -119,17 +149,36 @@ function renderOrders(){
   if(!orders.length){ box.innerHTML='<div class="combo">Sin ordenes manuales. Pulsa HE PUESTO LA ORDEN en una senal para seguirla aqui.</div>'; return; }
   let html='';
   for(const o of orders){
-    const net=orderExitNet(o);
-    let verdict, cls;
+    let verdict, cls, extra='';
+    const inv='<div class="combo">INVENTARIO NO VERIFICADO: necesitas el activo ya disponible en '+esc(o.exitEx)+' para la segunda pata.</div>';
     if(o.status==='CANCELADA'){ verdict='CANCELADA'; cls='no'; }
-    else if(o.status==='COMPLETADA'){ verdict='COMPLETADA - ejecuta salida en '+o.exitEx; cls='yes'; }
-    else if(o.status==='PARCIAL'){ verdict='FILL PARCIAL - vigila resto'; cls='prep'; }
-    else if(net==null){ verdict='sin datos live'; cls='no'; }
-    else if(net>=WATCH.minNet){ verdict='OPORTUNIDAD VIGENTE +'+net.toFixed(2)+'% - MANTENER'; cls='yes'; }
-    else if(net>0){ verdict='floja +'+net.toFixed(2)+'% - vigilar'; cls='warn'; }
-    else { verdict='RETIRAR '+net.toFixed(2)+'% - cancela'; cls='bad'; }
+    else if(o.status==='COMPLETADA'){
+      const r=orderExitRecalc(o, o.qtyUSDT||WATCH.tradeSize);
+      extra='<div class="combo" style="color:#ef4444">EXPOSICION ABIERTA: la pata maker esta completada, falta vender.</div>';
+      if(r.state==='DATOS ANTIGUOS'){ verdict='DATOS ANTIGUOS - no calcular salida'; cls='bad'; }
+      else if(r.state==='EXCHANGE DESCONECTADO'){ verdict='EXCHANGE DESCONECTADO'; cls='bad'; }
+      else if(r.state==='LIQUIDEZ INSUFICIENTE'){ verdict='LIQUIDEZ INSUFICIENTE ('+Math.round(r.covered)+'/'+r.need+' USDT)'; cls='bad'; }
+      else if(r.net>=WATCH.minNet){ verdict='SALIR AHORA +'+r.net.toFixed(2)+'% (vwap '+r.vwap.toFixed(4)+', '+r.lvls+' niveles)'; cls='yes'; }
+      else if(r.net<0){ verdict='SALIDA POSIBLE EN PERDIDA '+r.net.toFixed(2)+'% - no oculta'; cls='bad'; }
+      else { verdict='marginal +'+r.net.toFixed(2)+'% - vigilar'; cls='warn'; }
+    }
+    else if(o.status==='PARCIAL'){
+      const done=Number(o.fillQty||0), amt=Number(o.qtyUSDT||WATCH.tradeSize), pend=Math.max(0,amt-done);
+      const r=orderExitRecalc(o, done>0?done:amt);
+      const base=(r.state==='OK')?('completado '+done+' USDT -> neto '+r.net.toFixed(2)+'% (vwap '+r.vwap.toFixed(4)+')'):(r.state+' '+(r.covered!=null?Math.round(r.covered)+'/'+r.need:''));
+      verdict='FILL PARCIAL - '+base+' - pendiente '+pend+' USDT'; cls='prep';
+    }
+    else {
+      const r=orderExitRecalc(o, o.qtyUSDT||WATCH.tradeSize);
+      if(r.state==='DATOS ANTIGUOS'){ verdict='DATOS ANTIGUOS - no operable'; cls='bad'; }
+      else if(r.state==='EXCHANGE DESCONECTADO'){ verdict='sin datos de salida'; cls='no'; }
+      else if(r.state==='LIQUIDEZ INSUFICIENTE'){ verdict='RETIRAR - sin liquidez de salida'; cls='bad'; }
+      else if(r.net>=WATCH.minNet){ verdict='OPORTUNIDAD VIGENTE +'+r.net.toFixed(2)+'% - MANTENER'; cls='yes'; }
+      else if(r.net>0){ verdict='floja +'+r.net.toFixed(2)+'% - vigilar'; cls='warn'; }
+      else { verdict='RETIRAR '+r.net.toFixed(2)+'% - cancela'; cls='bad'; }
+    }
     html+='<div class="mkt"><div class="mkt-head"><span class="mkt-sym">'+esc(o.symbol)+' '+esc(o.side)+' '+esc(o.makerEx)+' @ '+esc(o.price)+'</span><span class="mkt-net '+cls+'">'+esc(verdict)+'</span></div>'
-    +'<div class="combo">Salida prevista: '+esc(o.exitEx)+' | puesta: '+esc(o.time||'')+' | estado: '+esc(o.status)+'</div>'
+    +'<div class="combo">Salida prevista: '+esc(o.exitEx)+' | importe: '+esc(o.qtyUSDT||WATCH.tradeSize)+' USDT | puesta: '+esc(o.time||'')+' | estado: '+esc(o.status)+(o.fillNote?' | nota: '+esc(o.fillNote):'')+'</div>'+inv
     +'<div class="combo"><button data-act="done" data-id="'+o.id+'">ME HAN COMPLETADO</button> <button data-act="partial" data-id="'+o.id+'">FILL PARCIAL</button> <button data-act="cancel" data-id="'+o.id+'">CANCELE LA ORDEN</button></div></div>';
   }
   box.innerHTML=html;
@@ -137,14 +186,23 @@ function renderOrders(){
     const orders=loadOrders(); const o=orders.find(x=>x.id===b.dataset.id); if(!o) return;
     if(b.dataset.act==='cancel') o.status='CANCELADA';
     if(b.dataset.act==='done') o.status='COMPLETADA';
-    if(b.dataset.act==='partial'){ const q=prompt('Cantidad ejecutada (texto libre):',''); o.status='PARCIAL'; if(q) o.fillNote=q; }
+    if(b.dataset.act==='partial'){ const q=prompt('Cantidad completada en USDT (numero):', String(o.qtyUSDT||WATCH.tradeSize)); o.status='PARCIAL'; if(q&&!isNaN(Number(q))) o.fillQty=Number(q); }
     saveOrders(orders); renderOrders();
   }));
 }
+function levelVolAt(sym,ex,side,price){
+  const lv=bookLevels(sym,ex,side); if(!lv) return null;
+  for(const l of lv){ if(Number(l.p)===Number(price)) return Number(l.p)*Number(l.q); }
+  return null;
+}
 function placeOrderFromSignal(i){
   const s=(window._signals||[])[i]; if(!s) return;
+  const q=prompt('Importe de la orden en USDT (numero):', String(WATCH.tradeSize));
+  const amt=(q&&!isNaN(Number(q))&&Number(q)>0)?Number(q):WATCH.tradeSize;
+  const mSide=(s.model==='A')?'bid':'ask';
+  const vis=levelVolAt(s.symbol,s.maker_exchange,mSide,s.limit_price);
   const orders=loadOrders();
-  orders.unshift({id:'o'+Date.now(), symbol:s.symbol, type:s.type, side:s.model==='A'?'BUY':'SELL', makerEx:s.maker_exchange, exitEx:s.exit_exchange, price:s.limit_price, qty:'', time:new Date().toLocaleString(), status:'EN COLA'});
+  orders.unshift({id:'o'+Date.now(), symbol:s.symbol, type:s.type, side:s.model==='A'?'BUY':'SELL', makerEx:s.maker_exchange, exitEx:s.exit_exchange, price:s.limit_price, qtyUSDT:amt, visibleVolThen:vis, exitPriceThen:s.exit_price, netThen:s.net, botVer:(window._botVer||null), webVer:WEB_VERSION, time:new Date().toISOString(), status:'EN COLA'});
   saveOrders(orders); renderOrders();
   document.getElementById('ordersBox').scrollIntoView();
 }
@@ -155,27 +213,34 @@ async function fetchDepth(){
     const j=await r.json();
     const rows=j.signals||[];
     window._signals=rows;
+    window._botVer=j.ver||null;
+    window._depthUpdated=new Date(j.updated||Date.now()).getTime();
+    window._books={}; (j.books||[]).forEach(b=>{ window._books[b.symbol]=b; });
+    const stale=((Date.now()-window._depthUpdated)/1000)>STALE_S;
     let html='';
+    if(stale) html+='<div class="mkt"><div class="mkt-head"><span class="mkt-sym">DATOS ANTIGUOS</span><span class="mkt-net bad">BOT PARADO o sin actualizar</span></div><div class="combo">Libro de hace mas de '+STALE_S+' s. No se muestra PREPARAR ni POSIBLE FILL como operables.</div></div>';
     for(let i=0;i<rows.slice(0,15).length;i++){
       const s=rows[i];
-      const cls=STATE_COLOR[s.state]||'no';
-      html+='<div class="mkt"><div class="mkt-head"><span class="mkt-sym">'+s.symbol+' - '+s.type+'</span><span class="mkt-net '+cls+'">'+s.state+'</span></div>'
-      +'<div class="combo">Maker <b>'+s.maker_exchange+'</b> limite <b>'+s.limit_price+'</b> -&gt; salida inmediata <b>'+s.exit_exchange+' '+s.exit_price+'</b> ['+s.model+']</div>'
+      let dispState=s.state, cls=STATE_COLOR[s.state]||'no';
+      if(stale&&(s.state==='PREPARAR'||s.state.indexOf('POSIBLE FILL')===0)){ dispState='DATOS ANTIGUOS'; cls='bad'; }
+      html+='<div class="mkt"><div class="mkt-head"><span class="mkt-sym">'+s.symbol+' - '+s.type+'</span><span class="mkt-net '+cls+'">'+dispState+'</span></div>'
+      +'<div class="combo">Maker <b>'+s.maker_exchange+'</b> limite <b>'+s.limit_price+'</b> -&gt; salida inmediata <b>'+s.exit_exchange+' '+s.exit_price+'</b> ['+s.model+'] - evidencia: <b>'+esc(s.evidence||'snapshot')+'</b></div>'
       +'<div class="combo">Cola delante: <b>'+(s.queue_ahead_usdt==null?'--':s.queue_ahead_usdt+' USDT')+'</b> - agotamiento <b>'+(s.depletion_rate==null?'--':s.depletion_rate+' USDT/s')+'</b> - fill estimado <b>'+(s.est_fill_s==null?'--':s.est_fill_s+' s')+'</b> - lecturas positivas <b>'+s.pos_reads+'</b> - edad <b>'+s.age_s+' s</b></div>'
-      +'<div class="combo">Bruto <b>'+s.gross+'%</b> - maker <b>'+s.maker_fee+'%</b> - taker <b>'+s.taker_fee+'%</b> - slippage <b>'+s.slippage+'%</b> - margen <b>'+s.safety+'%</b> = <b>NETO '+s.net+'%</b> - salida max <b>'+s.exit_vol_usdt+' USDT</b></div>'
+      +'<div class="combo">Bruto <b>'+s.gross+'%</b> - maker <b>'+s.maker_fee+'%</b> - taker <b>'+s.taker_fee+'%</b> - slippage <b>'+s.slippage+'%</b> - margen <b>'+s.safety+'%</b> = <b>NETO '+s.net+'%</b> - salida max <b>'+s.exit_vol_usdt+' USDT</b> (niveles '+s.exit_lvls+')</div>'
       +'<div class="combo">'+esc(s.state_reason||'')+'</div>'
+      +'<div class="combo">INVENTARIO NO VERIFICADO: necesitas el activo ya disponible en '+s.exit_exchange+'.</div>'
       +'<div class="combo"><a href="'+(s.pair_urls?s.pair_urls.buy:'#')+'" target="_blank" rel="noopener">Abrir '+s.maker_exchange+'</a> - <a href="'+(s.pair_urls?s.pair_urls.sell:'#')+'" target="_blank" rel="noopener">Abrir '+s.exit_exchange+'</a> <button data-sig="'+i+'">HE PUESTO LA ORDEN</button></div></div>';
     }
     if(!rows.length) html='<div class="combo">Sin senales ahora. El bot publica cuando un modelo A/B da neto sobre el umbral con salida liquida.</div>';
     const books=j.books||[];
     if(books.length){
-      html+='<div class="combo" style="margin:.6rem 0">Siguiente en cola por mercado (top 5 asks/bids, solo profundidad). Abre cada par:</div>';
+      html+='<div class="combo" style="margin:.6rem 0">Siguiente en cola por mercado (top 20 asks/bids, muestro 5, solo profundidad). Abre cada par:</div>';
       for(const b of books){
         let inner='';
         for(const ex of ['binance','mexc','bybit','okx']){
           if(!b[ex]) continue;
-          const a=(b[ex].asks||[]).map((l,i)=>'A'+(i+1)+' '+l.p+' ('+l.q+')').join(' - ');
-          const dd=(b[ex].bids||[]).map((l,i)=>'B'+(i+1)+' '+l.p+' ('+l.q+')').join(' - ');
+          const a=(b[ex].asks||[]).slice(0,5).map((l,i)=>'A'+(i+1)+' '+l.p+' ('+l.q+')').join(' - ');
+          const dd=(b[ex].bids||[]).slice(0,5).map((l,i)=>'B'+(i+1)+' '+l.p+' ('+l.q+')').join(' - ');
           inner+='<div style="margin:.25rem 0"><b>'+ex.toUpperCase()+'</b><br><span>ASK: '+a+'</span><br><span>BID: '+dd+'</span></div>';
         }
         html+='<details style="margin:.3rem 0"><summary><b>'+b.symbol+'</b> - ver cola</summary><div style="font-size:.78rem">'+inner+'</div></details>';
@@ -208,10 +273,52 @@ async function fetchLive(){
     }
     html+='</tbody></table></div><div class="combo">ASK=compro (naranja) - BID=vendo (azul) - verde=arb &gt;='+WATCH.minNet+'%</div>';
     window._liveRows={}; rows.forEach(s=>{ window._liveRows[s.symbol]=s; });
+    window._liveUpdated=new Date(j.updated||Date.now()).getTime();
+    window._liveBotVer=j.ver||window._liveBotVer||null;
     if(elements.liveBox) elements.liveBox.innerHTML=html||'sin datos';
     if(elements.liveTime) elements.liveTime.textContent=new Date(j.updated||Date.now()).toLocaleTimeString()+' ('+formatTimeAgo(j.updated||Date.now())+') - del bot';
     renderOrders();
   }catch(e){ if(elements.liveBox) elements.liveBox.innerHTML='live aun no publicado por el bot - corre <b>.\\bot.ps1</b> para generarlo. ('+e.message+')'; }
 }
-function init(){ renderWatch(); fetchAlerts(); fetchLive(); fetchDepth(); setInterval(fetchAlerts,CONFIG.refreshInterval); setInterval(fetchLive,15000); setInterval(fetchDepth,30000); }
+let _commitCache=null;
+async function fetchCommit(){
+  if(_commitCache) return _commitCache;
+  try{
+    const r=await fetch('https://api.github.com/repos/jarmy90/crypto-arb-alerts/commits?per_page=1&sha=main',{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    _commitCache={sha:String(j[0].sha).slice(0,7), date:j[0].commit.author.date};
+  }catch(e){ _commitCache={sha:'--', date:null}; }
+  return _commitCache;
+}
+function exStatus(ex){
+  const k=ex.toLowerCase();
+  let live=false, book=false;
+  const L=window._liveRows||{}, B=window._books||{};
+  for(const s in L){ const r=L[s]; if(r&&(r[k+'_bid']!=null||r[k+'_ask']!=null)){ live=true; break; } }
+  for(const s in B){ const r=B[s]; if(r&&r[k]&&((r[k].asks||[]).length||(r[k].bids||[]).length)){ book=true; break; } }
+  if(live&&book) return 'OK';
+  if(live||book) return 'PARCIAL';
+  return 'SIN DATOS';
+}
+async function renderVersion(){
+  const box=document.getElementById('verBox'); if(!box) return;
+  const botVer=window._botVer||window._liveBotVer||null;
+  const la=liveAgeS(), da=depthAgeS();
+  const c=await fetchCommit();
+  let bot, bcls;
+  const desync=botVer&&botVer!==WEB_VERSION;
+  if(desync){ bot='DESINCRONIZADO (web '+WEB_VERSION+' / bot '+botVer+')'; bcls='bad'; }
+  else if(la==null&&da==null){ bot='SIN DATOS'; bcls='no'; }
+  else if(Math.max(la==null?9999:la,da==null?9999:da)>DEAD_S){ bot='BOT PARADO'; bcls='bad'; }
+  else if(Math.max(la==null?9999:la,da==null?9999:da)>STALE_S){ bot='RETRASADO'; bcls='warn'; }
+  else { bot='LIVE'; bcls='yes'; }
+  const exs=WATCH.exchanges.map(e=>e+':'+exStatus(e)).join(' - ');
+  box.innerHTML='<div class="combo">Web <b>v'+WEB_VERSION+'</b> - bot <b>'+(botVer?('v'+botVer):'--')+'</b> - commit <b>'+esc(c.sha)+'</b> '+(c.date?esc(c.date):'')
+  +' - ticker hace <b>'+(la==null?'--':Math.round(la)+' s')+'</b> - libro hace <b>'+(da==null?'--':Math.round(da)+' s')+'</b></div>'
+  +'<div class="combo">Bot: <b>'+bot+'</b> - '+esc(exs)+'</div>';
+  const hb=document.getElementById('verBadge');
+  if(hb){ hb.innerHTML='<span class="mkt-net '+bcls+'">'+bot+'</span>'; }
+}
+function init(){ renderWatch(); fetchAlerts(); fetchLive(); fetchDepth(); renderVersion(); setInterval(fetchAlerts,CONFIG.refreshInterval); setInterval(fetchLive,15000); setInterval(fetchDepth,30000); setInterval(renderVersion,5000); }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
