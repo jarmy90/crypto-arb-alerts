@@ -91,12 +91,12 @@ async function fetchAlerts(){
   finally{ isLoading=false; }
 }
 elements.refreshBtn.addEventListener('click',()=>{fetchAlerts();fetchLive();fetchDepth();fetchStatus();});
-const WEB_VERSION='13.2';
+const WEB_VERSION='13.3';
 const STATUS_URL='https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/status.json';
 const MARKETS_URL='https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/markets.json';
 const LIVE_MAX_S=5, DELAYED_MAX_S=15, DEAD_S=60, DESYNC_S=180;
 const STALE_S=90;
-const STATE_COLOR={OBSERVAR:'warn',PREPARAR:'prep','NIVEL REDUCIDO':'warn','POSIBLE EJECUCION':'prep','POSIBLE FILL PARCIAL':'prep','POSIBLE FILL':'yes',RETIRAR:'bad'};
+const STATE_COLOR={OBSERVAR:'warn',PRESEÑAL:'warn',CERCA:'warn',PREPARAR:'prep','NIVEL REDUCIDO':'warn','POSIBLE EJECUCION':'prep','POSIBLE FILL PARCIAL':'prep','POSIBLE FILL':'yes',RETIRAR:'bad'};
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 function loadOrders(){ try{ return JSON.parse(localStorage.getItem('arb_orders')||'[]'); }catch(e){ return []; } }
 function saveOrders(o){ localStorage.setItem('arb_orders',JSON.stringify(o)); }
@@ -224,15 +224,30 @@ async function fetchDepth(){
     if(!operable) html+='<div class="mkt"><div class="mkt-head"><span class="mkt-sym">NO OPERABLE: '+sysNow.state+'</span><span class="mkt-net bad">'+esc(sysNow.detail||'')+'</span></div><div class="combo">Las senales de abajo son la ultima foto conocida. No se puede poner ordenes ni considerar PREPARAR/POSIBLE FILL como vigentes.</div></div>';
     for(let i=0;i<rows.slice(0,15).length;i++){
       const s=rows[i];
+      if(s.state==='CERCA'){ continue; }
       let dispState=s.state, cls=STATE_COLOR[s.state]||'no';
       if(!operable&&(s.state==='PREPARAR'||s.state.indexOf('POSIBLE FILL')===0)){ dispState='BLOQUEADA ('+sysNow.state+')'; cls='bad'; }
+      const feeBadge=(s.fee_verified)?'verificada':'FEE NO VERIFICADA';
+      const sz=(s.sizes||[]).filter(r=>r.covered).map(r=>r.size+':'+r.net+'%').join(' ');
       html+='<div class="mkt"><div class="mkt-head"><span class="mkt-sym">'+s.symbol+' - '+s.type+'</span><span class="mkt-net '+cls+'">'+dispState+'</span></div>'
-      +'<div class="combo">Grupo <b>'+esc(s.normalized_symbol||s.symbol)+'</b> ('+esc(s.base||'')+'/'+esc(s.quote||'')+') - maker <b>'+s.maker_exchange+'</b> ['+esc(s.maker_native_symbol||'')+'] limite <b>'+s.limit_price+'</b> -&gt; salida inmediata <b>'+s.exit_exchange+'</b> ['+esc(s.exit_native_symbol||'')+'] '+s.exit_price+' ['+s.model+'] - evidencia: <b>'+esc(s.evidence||'snapshot')+'</b></div>'
-      +'<div class="combo">Cola delante: <b>'+(s.queue_ahead_usdt==null?'--':s.queue_ahead_usdt+' USDT')+'</b> - agotamiento <b>'+(s.depletion_rate==null?'--':s.depletion_rate+' USDT/s')+'</b> - fill estimado <b>'+(s.est_fill_s==null?'--':s.est_fill_s+' s')+'</b> - lecturas positivas <b>'+s.pos_reads+'</b> - edad <b>'+s.age_s+' s</b></div>'
-      +'<div class="combo">Bruto <b>'+s.gross+'%</b> - maker <b>'+s.maker_fee+'%</b> - taker <b>'+s.taker_fee+'%</b> - slippage <b>'+s.slippage+'%</b> - margen <b>'+s.safety+'%</b> = <b>NETO '+s.net+'%</b> - salida max <b>'+s.exit_vol_usdt+' USDT</b> (niveles '+s.exit_lvls+')</div>'
+      +'<div class="combo">Grupo <b>'+esc(s.normalized_symbol||s.symbol)+'</b> ('+esc(s.base||'')+'/'+esc(s.quote||'')+') - maker <b>'+s.maker_exchange+'</b> ['+esc(s.maker_native_symbol||'')+'] limite <b>'+s.limit_price+'</b> -&gt; salida inmediata <b>'+s.exit_exchange+'</b> ['+esc(s.exit_native_symbol||'')+'] '+s.exit_price+' ['+s.model+'] - evidencia: <b>'+esc(s.evidence||'snapshot')+'</b> - calidad: <b>'+esc(s.quality||'')+'</b></div>'
+      +'<div class="combo">Umbral dinamico <b>'+s.dyn_threshold+'%</b> (bruto incluido) = maker '+s.maker_fee+' + taker '+s.taker_fee+' + slip '+s.slippage+' + latencia/slippage-parcial/volatilidad/margen - exceso <b>'+s.excess+'%</b> - fee '+feeBadge+'</div>'
+      +'<div class="combo">Tamanos: '+esc(sz||'--')+' - mejor% <b>'+s.best_pct_size+'</b> - mejor abs <b>'+s.best_abs_size+'</b> - recomendado <b>'+s.recommended_size+'</b></div>'
+      +'<div class="combo">Flujo: <b>'+esc(s.flow_state||'')+'</b> fav '+s.flow_fav+' vs contra '+s.flow_contra+' USDT ('+s.flow_n+' ops, media '+s.flow_avg+', acel '+s.flow_accel+')</div>'
+      +'<div class="combo">Salida viva '+s.age_s+' s: min '+s.exit_min+' max '+s.exit_max+' media '+s.exit_avg+'% - survival '+s.survival_ratio+' ('+esc(s.survival_class||'')+') - desapariciones '+s.exit_gaps+'</div>'
+      +'<div class="combo">Score <b>'+s.score+'/100 ['+esc(s.score_band||'')+']</b> - '+esc(s.score_detail||'')+'</div>'
+      +'<div class="combo">Cola delante: <b>'+(s.queue_ahead_usdt==null?'--':s.queue_ahead_usdt+' USDT')+'</b> - agotamiento <b>'+(s.depletion_rate==null?'--':s.depletion_rate+' USDT/s')+'</b> - fill estimado <b>'+(s.est_fill_s==null?'NO CALCULABLE':s.est_fill_s+' s')+'</b> ('+esc(s.fill_quality||'')+') - lecturas <b>'+s.pos_reads+'</b></div>'
       +'<div class="combo">'+esc(s.state_reason||'')+'</div>'
       +'<div class="combo">INVENTARIO NO VERIFICADO: necesitas el activo ya disponible en '+s.exit_exchange+'.</div>'
       +'<div class="combo"><a href="'+(s.pair_urls?s.pair_urls.buy:'#')+'" target="_blank" rel="noopener">Abrir '+s.maker_exchange+'</a> - <a href="'+(s.pair_urls?s.pair_urls.sell:'#')+'" target="_blank" rel="noopener">Abrir '+s.exit_exchange+'</a> <button data-sig="'+i+'"'+(operable?'':' disabled')+'>HE PUESTO LA ORDEN</button></div></div>';
+    }
+    const cerca=rows.filter(s=>s.state==='CERCA');
+    if(cerca.length){
+      html+='<div class="combo" style="margin:.8rem 0"><b>CASI OPORTUNIDADES (no operables, sin verde, sin boton):</b></div>';
+      for(const s of cerca.slice(0,10)){
+        html+='<div class="mkt"><div class="mkt-head"><span class="mkt-sym">'+s.symbol+' '+s.type+'</span><span class="mkt-net warn">CERCA</span></div>'
+        +'<div class="combo">'+s.maker_exchange+' -&gt; '+s.exit_exchange+' neto <b>'+s.net+'%</b> - umbral <b>'+s.dyn_threshold+'%</b> - falta <b>'+(Number(s.dyn_threshold)-Number(s.net)).toFixed(2)+'%</b> - cola '+s.queue_ahead_usdt+' - fill '+(s.est_fill_s==null?'NO CALCULABLE':s.est_fill_s+' s')+'</div></div>';
+      }
     }
     if(!rows.length) html='<div class="combo">Sin senales ahora. El bot publica cuando un modelo A/B da neto sobre el umbral con salida liquida.</div>';
     const books=j.books||[];
@@ -423,3 +438,4 @@ function init(){ renderWatch(); fetchAlerts(); fetchLive(); fetchDepth(); fetchS
   if(bH) bH.addEventListener('click',()=>switchTab('hist'));
   setInterval(fetchAlerts,30000); setInterval(fetchLive,15000); setInterval(fetchDepth,30000); setInterval(fetchStatus,10000); setInterval(fetchMarkets,300000); setInterval(renderVersion,5000); setInterval(renderOrders,10000); }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+
