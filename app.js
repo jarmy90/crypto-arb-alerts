@@ -96,7 +96,8 @@ async function fetchLive(){
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
     const j=await r.json();
     const rows=j.symbols||[];
-    let html='';
+    const f=(v)=>{ v=Number(v); return v>=1000?v.toFixed(2):v>=1?v.toFixed(4):v.toFixed(6); };
+    let html=`<div style="overflow-x:auto"><table class="live-table"><thead><tr><th>Par</th><th>Bin ASK<br><span>c</span></th><th>Bin BID<br><span>v</span></th><th>Mex ASK<br><span>c</span></th><th>Mex BID<br><span>v</span></th><th>Byb ASK<br><span>c</span></th><th>Byb BID<br><span>v</span></th><th>Neto</th></tr></thead><tbody>`;
     for(const s of rows.slice(0,15)){
       const ok=s.best>=WATCH.minNet;
       const bB=Number(s.binance_bid),bA=Number(s.binance_ask),mB=Number(s.mexc_bid),mA=Number(s.mexc_ask);
@@ -104,13 +105,10 @@ async function fetchLive(){
       const hasY=!!(s.bybit_bid&&s.bybit_ask);
       const minAsk=Math.min(bA,mA,...(hasY?[yA]:[]));
       const maxBid=Math.max(bB,mB,...(hasY?[yB]:[]));
-      const f=(v)=>v>=1000?v.toFixed(2):v>=1?v.toFixed(4):v.toFixed(6);
-      const cell=(lbl,val,cls)=>`<div class="cell ${cls}"><div class="lbl">${lbl}</div><div class="val">${f(val)}</div></div>`;
-      const col=(name,ask,bid)=>`<div class="ex"><div class="ex-name">${name}</div>${cell('ASK · compro',ask,ask===minAsk?'best-buy':'')}${cell('BID · vendo',bid,bid===maxBid?'best-sell':'')}</div>`;
-      html+=`<div class="mkt ${ok?'arb':''}"><div class="mkt-head"><span class="mkt-sym">${s.symbol}</span><span class="mkt-net ${ok?'yes':'no'}">${ok?'🟢 '+Number(s.best).toFixed(2)+'% ARB':'⚪ '+Number(s.best).toFixed(2)+'% neto'}</span></div>`
-        +`<div class="ex-grid">${col('BINANCE',bA,bB)}${col('MEXC',mA,mB)}${hasY?col('BYBIT',yA,yB):''}</div>`
-        +`<div class="combo">Mejor: comprar en <b>${s.best_buy||'—'}</b> → vender en <b>${s.best_sell||'—'}</b> · esa combinación en <b style="color:${ok?'#10b981':'#f59e0b'}">${ok?'verde (oportunidad)':'amarillo (bajo umbral)'}</b></div></div>`;
+      const td=(v,cls)=>`<td class="${cls}">${f(v)}</td>`;
+      html+=`<tr class="${ok?'arb':''}"><td class="sym">${s.symbol.replace('/','')}</td>${td(bA,bA===minAsk?'bb':'')}${td(bB,bB===maxBid?'bs':'')}${td(mA,mA===minAsk?'bb':'')}${td(mB,mB===maxBid?'bs':'')}${hasY?td(yA,yA===minAsk?'bb':'')+td(yB,yB===maxBid?'bs':''):'<td>—</td><td>—</td>'}<td class="net ${ok?'yes':'no'}">${Number(s.best).toFixed(2)}%</td></tr>`;
     }
+    html+=`</tbody></table></div><div class="combo">ASK=compro · BID=vendo · <b style="color:#f59e0b">amarillo</b>=mejor compra/venta · <b style="color:#10b981">verde</b>=arb ≥${WATCH.minNet}% · ${rows[0]?.best_buy?`Ej: BTC ${rows[0].best_buy}→${rows[0].best_sell}`:''}</div>`;
     if(elements.liveBox) elements.liveBox.innerHTML=html||'sin datos';
     if(elements.liveTime) elements.liveTime.textContent=`${new Date(j.updated||Date.now()).toLocaleTimeString()} (${formatTimeAgo(j.updated||Date.now())}) · del bot`;
   }catch(e){ if(elements.liveBox) elements.liveBox.innerHTML=`live aún no publicado por el bot — corre <b>.\\bot.ps1</b> para generarlo. (${e.message})`; }
