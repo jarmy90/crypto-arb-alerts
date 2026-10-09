@@ -101,11 +101,12 @@ async function fetchDepth(){
     let html='';
     for(const s of rows.slice(0,15)){
       const cls=s.fill_suspected?'arb':'';
+      const sideTxt=s.side?'<div class="combo">Lado a agotar: <b>'+s.side+'</b> (ASK '+s.ask_vol_usdt+' vs BID '+s.bid_vol_usdt+' USDT) - '+(s.side==='ASK'?'el ASK se come antes, el precio sube y tu BID te lo cogen':'el BID se come antes, el precio puede bajar, entras mas abajo')+'</div>':'';
       const mkt=(s.mkt_net_lvl1!=null)?' Mercado directo ASK-&gt;BID daria <b>'+s.mkt_net_lvl1+'%</b>'+(s.mkt_net_lvl2!=null?' (nivel 2: '+s.mkt_net_lvl2+'%)':''):'';
       const comboTxt='Tu flujo: entra en <b>COLA-BID '+s.buy_exchange+' '+(s.buy_price||s.entry_price)+'</b> -&gt; vende <b>BID '+s.sell_exchange+' '+s.sell_price+'</b> = <b>'+Number(s.net_if_filled).toFixed(2)+'%</b>'+mkt;
       const nxt=(s.ask_next!=null)?'<div class="combo">Siguiente ASK en cola: <b>'+s.ask_next+'</b> ('+s.ask_next_vol_usdt+' USDT)</div>':'';
       html+='<div class="mkt '+cls+'"><div class="mkt-head"><span class="mkt-sym">'+s.symbol+' - '+s.buy_exchange+' -&gt; '+s.sell_exchange+'</span><span class="mkt-net '+(s.fill_suspected?'yes':'no')+'">'+(s.fill_suspected?'POSIBLE FILL':Number(s.net_if_filled).toFixed(2)+'% si entra')+'</span></div>'
-      +'<div class="combo">Entrada limite sugerida <b>'+s.entry_price+'</b> (ask fino '+s.ask_vol_usdt+' USDT) - neto estimado <b>'+s.net_if_filled+'%</b></div>'+'<div class="combo">'+comboTxt+'</div>'+nxt+'</div>';
+      +sideTxt+'<div class="combo">Entrada limite sugerida <b>'+s.entry_price+'</b> (ask fino '+s.ask_vol_usdt+' USDT) - neto estimado <b>'+s.net_if_filled+'%</b></div>'+'<div class="combo">'+comboTxt+'</div>'+nxt+'</div>';
     }
     const books=j.books||[];
     if(books.length){
