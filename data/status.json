@@ -2,14 +2,14 @@
     "ver":  "13",
     "mode":  "continuous",
     "bot_started_at":  "2026-10-09T11:39:29.4951551Z",
-    "bot_heartbeat_at":  "2026-10-09T12:02:27.4427543Z",
+    "bot_heartbeat_at":  "2026-10-09T12:02:50.5221649Z",
     "ticker_updated_at":  "2026-10-09T12:02:27.4379175Z",
-    "depth_updated_at":  "2026-10-09T12:01:59.4879682Z",
-    "trades_updated_at":  "2026-10-09T12:01:59.7642681Z",
+    "depth_updated_at":  "2026-10-09T12:02:47.4711815Z",
+    "trades_updated_at":  "2026-10-09T12:02:47.7340097Z",
     "cycle_id":  "c20261009113929-#27",
-    "cycle_duration_ms":  41420,
+    "cycle_duration_ms":  38970,
     "bot_status":  "RUNNING",
-    "phase":  "ticker-done",
+    "phase":  "cycle-end",
     "exchanges":  {
                       "BYBIT":  {
                                     "ok":  15,
@@ -28,5 +28,5 @@
                                    "fail":  0
                                }
                   },
-    "timestamp":  "2026-10-09T12:02:27.4427543Z"
+    "timestamp":  "2026-10-09T12:02:50.5221649Z"
 }
