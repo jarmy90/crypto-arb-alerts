@@ -29,6 +29,10 @@ $FEE_O = [double](Get-Cfg "FEE_OKX" "0.10")
 $WAIT  = [int](Get-Cfg "CHECK_INTERVAL" "8")
 $COOL  = [int](Get-Cfg "COOLDOWN_SECONDS" "90")
 $MAXA  = [int](Get-Cfg "MAX_ALERTS" "50")
+$THIN  = [double](Get-Cfg "THIN_BOOK_USDT" "1000")
+$DINT  = [int](Get-Cfg "DEPTH_INTERVAL" "30")
+$lastDepth = [DateTime]::MinValue
+$tracked = @{}
 $PATHF = Get-Cfg "GITHUB_FILE_PATH" "data/alerts.json"
 $SYMS  = (Get-Cfg "SYMBOLS" "BTC/USDT,ETH/USDT,BNB/USDT,SOL/USDT,XRP/USDT,ADA/USDT,DOGE/USDT").Split(",") | ForEach-Object { $_.Trim() }
 
@@ -43,6 +47,20 @@ function Get-Prices($sym) {
   try { $y = Invoke-RestMethod "https://api.bybit.com/v5/market/tickers?category=spot&symbol=$s" -TimeoutSec 10; $t=$y.result.list[0]; $yB=[double]$t.bid1Price; $yA=[double]$t.ask1Price } catch { Write-Host "  Bybit $sym error: $($_.Exception.Message)" }
   try { $o = Invoke-RestMethod "https://www.okx.com/api/v5/market/ticker?instId=$oid" -TimeoutSec 10; $d=$o.data[0]; $oB=[double]$d.bidPx; $oA=[double]$d.askPx } catch { Write-Host "  OKX $sym error: $($_.Exception.Message)" }
   return @{ B=$b; M=$m; YB=$yB; YA=$yA; OB=$oB; OA=$oA }
+}
+function Get-Depth($ex,$sym){
+  $s=$sym.Replace("/",""); $oid=$sym.Replace("/","-")
+  try{
+    if($ex -eq "BINANCE"){ $d=Invoke-RestMethod "https://api.binance.com/api/v3/depth?symbol=$s&limit=5" -TimeoutSec 10; return @{ask=[double]$d.asks[0][0]; askQ=[double]$d.asks[0][1]; bid=[double]$d.bids[0][0]; bidQ=[double]$d.bids[0][1]} }
+    if($ex -eq "MEXC"){ $d=Invoke-RestMethod "https://api.mexc.com/api/v3/depth?symbol=$s&limit=5" -TimeoutSec 10; return @{ask=[double]$d.asks[0][0]; askQ=[double]$d.asks[0][1]; bid=[double]$d.bids[0][0]; bidQ=[double]$d.bids[0][1]} }
+    if($ex -eq "BYBIT"){ $d=Invoke-RestMethod "https://api.bybit.com/v5/market/orderbook?category=spot&symbol=$s&limit=5" -TimeoutSec 10; $a=$d.result.a[0]; $b2=$d.result.b[0]; return @{ask=[double]$a[0]; askQ=[double]$a[1]; bid=[double]$b2[0]; bidQ=[double]$b2[1]} }
+    $d=Invoke-RestMethod "https://www.okx.com/api/v5/market/books?instId=$oid&sz=5" -TimeoutSec 10; $asks=$d.data[0].asks; $bids=$d.data[0].bids
+    $ba=($asks | ForEach-Object { [double]$_[0] } | Measure-Object -Minimum).Minimum
+    $baQ=0; foreach($r in $asks){ if([double]$r[0] -eq $ba){ $baQ=[double]$r[1]; break } }
+    $bb=($bids | ForEach-Object { [double]$_[0] } | Measure-Object -Maximum).Maximum
+    $bbQ=0; foreach($r in $bids){ if([double]$r[0] -eq $bb){ $bbQ=[double]$r[1]; break } }
+    return @{ask=$ba; askQ=$baQ; bid=$bb; bidQ=$bbQ}
+  }catch{ return $null }
 }
 function Get-TradeUrl($ex,$sym){
   $uf=$sym.Replace("/","_"); $parts=$sym.Split("/"); $base=$parts[0]; $quote=$parts[1]
@@ -122,6 +140,45 @@ do {
     Invoke-RestMethod -Uri $lurl -Method Put -Headers $H -Body ($lbody | ConvertTo-Json -Depth 5) -ContentType "application/json" -TimeoutSec 15 | Out-Null
     Write-Host "Live publicado ($($live.Count) pares)"
   } catch { Write-Host "  Live push error: $($_.Exception.Message)" -ForegroundColor Yellow }
+  if(((Get-Date)-$lastDepth).TotalSeconds -ge $DINT){
+    $lastDepth=Get-Date; $depth=@()
+    $fees=@{BINANCE=$FEE_B;MEXC=$FEE_M;BYBIT=$FEE_Y;OKX=$FEE_O}
+    foreach($sym in $SYMS){
+      $bk=@{}
+      foreach($ex in @("BINANCE","MEXC","BYBIT","OKX")){ $q=Get-Depth $ex $sym; if($q){ $bk[$ex]=$q } }
+      if($bk.Count -lt 2){ continue }
+      foreach($be in $bk.Keys){
+        $ask=$bk[$be].ask; $askU=$ask*$bk[$be].askQ
+        if($askU -gt $THIN){ continue }
+        $entry=$bk[$be].bid
+        $bestS=""; $bestB=0
+        foreach($se in $bk.Keys){ if($se -eq $be){continue}; if($bk[$se].bid -gt $bestB){ $bestB=$bk[$se].bid; $bestS=$se } }
+        if(-not $bestS){ continue }
+        $net=(($bestB-$entry)/$entry*100)-$fees[$be]-$fees[$bestS]
+        $worth=$net -ge $MIN
+        $key="$sym|$be"; $fill=$false
+        if($tracked.ContainsKey($key)){ $prev=$tracked[$key]; if($prev.entry -and $ask -gt $prev.entry){ $fill=$true } }
+        $tracked[$key]=@{entry=$entry; ask=$ask}
+        if($worth -or $fill){
+          $sig=[ordered]@{symbol=$sym; buy_exchange=$be; sell_exchange=$bestS; entry_price=[Math]::Round($entry,8); ask_now=[Math]::Round($ask,8); ask_vol_usdt=[Math]::Round($askU,2); sell_bid=[Math]::Round($bestB,8); net_if_filled=[Math]::Round($net,2); worth=$worth; fill_suspected=$fill; timestamp=([DateTime]::UtcNow.ToString("o")); pair_urls=@{buy=(Get-TradeUrl $be $sym); sell=(Get-TradeUrl $bestS $sym)}}
+          $depth+=$sig
+          if($fill){ Write-Host "  POSIBLE FILL $sym en $be a $($sig.entry_price) -> vende $bestS" -ForegroundColor Yellow; if(Push-Alert ([ordered]@{symbol=$sym; buy_exchange=$be; sell_exchange=$bestS; buy_price=$sig.entry_price; sell_price=$sig.sell_bid; gross_spread=$sig.net_if_filled; net_spread=$sig.net_if_filled; estimated_profit=[Math]::Round((($SIZE/$sig.entry_price)*$sig.sell_bid)-$SIZE,2); timestamp=$sig.timestamp; pair_urls=$sig.pair_urls; kind="fill"})){ $lastAlert[$sym]=Get-Date } }
+          elseif($worth){ Write-Host "  LIBRO FINO $sym $be askVol $($sig.ask_vol_usdt) USDT entrada $($sig.entry_price) neto $($sig.net_if_filled)%" -ForegroundColor Cyan }
+        }
+      }
+    }
+    @{ updated=([DateTime]::UtcNow.ToString("o")); thin_usdt=$THIN; signals=$depth } | ConvertTo-Json -Depth 6 | Set-Content "data/depth.json" -Encoding UTF8
+    try {
+      $dj=Get-Content "data/depth.json" -Raw -Encoding UTF8
+      $db64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($dj))
+      $durl="https://api.github.com/repos/$REPO/contents/data/depth.json"
+      $dsha=$null; try{ $dsha=(Invoke-RestMethod -Uri "$durl`?ref=main" -Headers $H -TimeoutSec 10).sha }catch{}
+      $dbody=@{ message="Update depth - $([DateTime]::UtcNow.ToString('yyyy-MM-dd HH:mm:ss')) UTC"; content=$db64; branch="main" }
+      if($dsha){ $dbody.sha=$dsha }
+      Invoke-RestMethod -Uri $durl -Method Put -Headers $H -Body ($dbody|ConvertTo-Json -Depth 5) -ContentType "application/json" -TimeoutSec 15 | Out-Null
+      Write-Host "Depth publicado ($($depth.Count) senales)"
+    } catch { Write-Host "  Depth push error: $($_.Exception.Message)" -ForegroundColor Yellow }
+  }
   Write-Host "Fin scan #$n. Proximo en ${WAIT}s..."
   if ($Once) { break }
   Start-Sleep -Seconds $WAIT
