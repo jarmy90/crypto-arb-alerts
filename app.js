@@ -2,9 +2,9 @@
 const GITHUB_URL = 'https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/alerts.json';
 const LIVE_URL = 'https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/live.json';
 const WATCH = {
-  exchanges: ['BINANCE','MEXC'],
+  exchanges: ['BINANCE','MEXC','BYBIT'],
   symbols: ['BTC/USDT','ETH/USDT','BNB/USDT','SOL/USDT','XRP/USDT','ADA/USDT','DOGE/USDT','DOT/USDT','POL/USDT','LTC/USDT','AVAX/USDT','LINK/USDT','UNI/USDT','ATOM/USDT','NEAR/USDT'],
-  minNet: 0.40, tradeSize: 500, feeBinance: 0.10, feeMexc: 0.05
+  minNet: 0.40, tradeSize: 500, feeBinance: 0.10, feeMexc: 0.05, feeBybit: 0.10
 };
 const CONFIG = { alertsUrl: GITHUB_URL, refreshInterval: 12000, maxRecentMinutes: 15 };
 
@@ -42,13 +42,12 @@ function updateStats(recent){
 }
 function renderWatch(){
   if(elements.watchList) elements.watchList.innerHTML = WATCH.symbols.map(s=>`<span class="pair-chip">${s}</span>`).join(' ');
-  if(elements.cfgLine) elements.cfgLine.textContent = `Exchanges: ${WATCH.exchanges.join(' ↔ ')} | Umbral neto ≥ ${WATCH.minNet}% | Trade ${WATCH.tradeSize} USDT | Fees Binance ${WATCH.feeBinance}% / MEXC ${WATCH.feeMexc}% | Escaneo cada 8s`;
+  if(elements.cfgLine) elements.cfgLine.textContent = `Exchanges: ${WATCH.exchanges.join(' ↔ ')} | Umbral neto ≥ ${WATCH.minNet}% | Trade ${WATCH.tradeSize} USDT | Fees Bin ${WATCH.feeBinance}% / Mex ${WATCH.feeMexc}% / Byb ${WATCH.feeBybit}% | Escaneo cada 8s`;
 }
 function pairLinks(a){
-  const uf=(a.symbol||'BTC/USDT').replace('/','_');
-  const buy=(a.buy_exchange==='BINANCE')?`https://www.binance.com/en/trade/${uf}?type=spot`:`https://www.mexc.com/exchange/${uf}`;
-  const sell=(a.sell_exchange==='BINANCE')?`https://www.binance.com/en/trade/${uf}?type=spot`:`https://www.mexc.com/exchange/${uf}`;
-  return { buy: (a.pair_urls&&a.pair_urls.buy)||buy, sell: (a.pair_urls&&a.pair_urls.sell)||sell };
+  const sym=a.symbol||'BTC/USDT'; const uf=sym.replace('/','_'); const parts=sym.split('/'); const base=parts[0], quote=parts[1]||'USDT';
+  const url=(ex)=>ex==='BINANCE'?`https://www.binance.com/en/trade/${uf}?type=spot`:ex==='MEXC'?`https://www.mexc.com/exchange/${uf}`:`https://www.bybit.com/en/trade/spot/${base}/${quote}`;
+  return { buy: (a.pair_urls&&a.pair_urls.buy)||url(a.buy_exchange), sell: (a.pair_urls&&a.pair_urls.sell)||url(a.sell_exchange) };
 }
 function createAlertCard(a, historic){
   const d=document.createElement('div'); d.className='alert-card';
@@ -100,7 +99,9 @@ async function fetchLive(){
     let html='';
     for(const s of rows.slice(0,15)){
       const ok=s.best>=WATCH.minNet;
-      html+=`<div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid #374151"><span><b>${s.symbol}</b> Bin <b>${Number(s.binance_bid).toFixed(2)}</b> / Mex <b>${Number(s.mexc_bid).toFixed(2)}</b></span><span style="color:${ok?'#10b981':'#9ca3af'}">${ok?'🟢 ARB '+Number(s.best).toFixed(2)+'%':'⚪ '+Number(s.best).toFixed(2)+'% neto'}</span></div>`;
+      const byb=s.bybit_bid?` / Byb <b>${Number(s.bybit_bid).toFixed(2)}</b>`:'';
+      const dir=(s.best_buy&&s.best_sell)?` <span style="color:#6b7280">${s.best_buy}→${s.best_sell}</span>`:'';
+      html+=`<div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid #374151"><span><b>${s.symbol}</b> Bin <b>${Number(s.binance_bid).toFixed(2)}</b> / Mex <b>${Number(s.mexc_bid).toFixed(2)}</b>${byb}${dir}</span><span style="color:${ok?'#10b981':'#9ca3af'}">${ok?'🟢 ARB '+Number(s.best).toFixed(2)+'%':'⚪ '+Number(s.best).toFixed(2)+'% neto'}</span></div>`;
     }
     if(elements.liveBox) elements.liveBox.innerHTML=html||'sin datos';
     if(elements.liveTime) elements.liveTime.textContent=`${new Date(j.updated||Date.now()).toLocaleTimeString()} (${formatTimeAgo(j.updated||Date.now())}) · del bot`;
