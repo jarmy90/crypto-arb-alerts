@@ -1,6 +1,7 @@
-# depth-common.ps1 v13 - logica compartida (bot-local.ps1 y bot.ps1 la importan con dot-source).
-# Centraliza: niveles, VWAP, slippage, neto unico, modelos A/B, agotamiento, trades, estados.
-$COMMON_VERSION = "13"
+# depth-common.ps1 v13.2 - logica compartida (bot-local.ps1 y bot.ps1 la importan con dot-source).
+# Centraliza: niveles, VWAP, slippage, neto unico, modelos A/B, agotamiento, trades, estados,
+# catalogos spot, grupos base/quote con simbolos nativos por exchange.
+$COMMON_VERSION = "13.2"
 
 function MkLevels($rows, $n){
   $out=@()
@@ -128,7 +129,8 @@ function Estimate-Partial($queueAheadInitial, $tradedAtPrice, $ownAmount){
 }
 
 # Evalua modelos A/B para un simbolo. Actualiza $hist. Devuelve @{signals=@(); booksRow; tradesStats}
-function Eval-Depth($sym, $bk, $cfg, $hist, $now, $getTradeUrl){
+# $grp opcional: @{base; quote; normalized; natives=@{EX=nativo}} para sellar base/quote/nativos.
+function Eval-Depth($sym, $bk, $cfg, $hist, $now, $getTradeUrl, $grp=$null){
   $out=@(); $tradesN=0; $tradesOk=0
   $brow=[ordered]@{symbol=$sym}
   foreach($ex in $bk.Keys){ $brow[$ex.ToLower()]=@{asks=$bk[$ex].asks; bids=$bk[$ex].bids} }
@@ -233,6 +235,14 @@ function Eval-Depth($sym, $bk, $cfg, $hist, $now, $getTradeUrl){
         $out+=$sig
       }
     }
+  }
+  if($grp -ne $null){
+    foreach($s in $out){
+      $s.base=$grp.base; $s.quote=$grp.quote; $s.normalized_symbol=$grp.normalized
+      if($grp.natives -and $s.maker_exchange){ $s.maker_native_symbol=$grp.natives[$s.maker_exchange] }
+      if($grp.natives -and $s.exit_exchange){ $s.exit_native_symbol=$grp.natives[$s.exit_exchange] }
+    }
+    if($brow -is [System.Collections.Specialized.OrderedDictionary]){ $brow.base=$grp.base; $brow.quote=$grp.quote }
   }
   return @{signals=$out; booksRow=$brow; tradesN=$tradesN; tradesOk=$tradesOk}
 }
