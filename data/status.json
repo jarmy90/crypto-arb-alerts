@@ -2,31 +2,31 @@
     "ver":  "13",
     "mode":  "continuous",
     "bot_started_at":  "2026-10-09T11:39:29.4951551Z",
-    "bot_heartbeat_at":  "2026-10-09T11:52:21.3528473Z",
+    "bot_heartbeat_at":  "2026-10-09T11:52:30.5924152Z",
     "ticker_updated_at":  "2026-10-09T11:51:59.2999804Z",
     "depth_updated_at":  "2026-10-09T11:52:18.3795246Z",
     "trades_updated_at":  "2026-10-09T11:52:18.6329926Z",
-    "cycle_id":  "c20261009113929-#15",
+    "cycle_id":  "c20261009113929-#16",
     "cycle_duration_ms":  37642,
     "bot_status":  "RUNNING",
-    "phase":  "cycle-end",
+    "phase":  "cycle-start",
     "exchanges":  {
                       "BYBIT":  {
-                                    "ok":  15,
-                                    "fail":  0
+                                    "fail":  0,
+                                    "ok":  0
                                 },
                       "BINANCE":  {
-                                      "ok":  15,
-                                      "fail":  0
+                                      "fail":  0,
+                                      "ok":  0
                                   },
                       "OKX":  {
-                                  "ok":  15,
-                                  "fail":  0
+                                  "fail":  0,
+                                  "ok":  0
                               },
                       "MEXC":  {
-                                   "ok":  15,
-                                   "fail":  0
+                                   "fail":  0,
+                                   "ok":  0
                                }
                   },
-    "timestamp":  "2026-10-09T11:52:21.3528473Z"
+    "timestamp":  "2026-10-09T11:52:30.5924152Z"
 }
