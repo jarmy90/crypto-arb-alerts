@@ -159,21 +159,33 @@ do {
         $ask=$bk[$be].ask; $askU=$ask*$bk[$be].askQ
         if($askU -gt $THIN){ continue }
         $entry=$bk[$be].bid
-        $bestS=""; $bestB=0
-        foreach($se in $bk.Keys){ if($se -eq $be){continue}; if($bk[$se].bid -gt $bestB){ $bestB=$bk[$se].bid; $bestS=$se } }
+        $a2=$null; if($bk[$be].asks.Count -ge 2){ $a2=[double]$bk[$be].asks[1].p }
+        $bestNet=-999; $bestS=""; $bbP=0; $bl=1; $sl=1
+        foreach($se in $bk.Keys){
+          if($se -eq $be){ continue }
+          $b1=[double]$bk[$se].bid
+          $b2=$null; if($bk[$se].bids.Count -ge 2){ $b2=[double]$bk[$se].bids[1].p }
+          $combos=,@(@($ask,$b1,1,1))
+          if($a2){ $combos+=,@($a2,$b1,2,1) }
+          if($b2){ $combos+=,@($ask,$b2,1,2) }
+          if($a2 -and $b2){ $combos+=,@($a2,$b2,2,2) }
+          foreach($c in $combos){
+            $nn=(($c[1]-$c[0])/$c[0]*100)-$fees[$be]-$fees[$se]
+            if($nn -gt $bestNet){ $bestNet=$nn; $bestS=$se; $bbP=$c[1]; $bp=$c[0]; $bl=$c[2]; $sl=$c[3] }
+          }
+        }
         if(-not $bestS){ continue }
-        $net=(($bestB-$entry)/$entry*100)-$fees[$be]-$fees[$bestS]
+        $net=$bestNet
         $worth=$net -ge $MIN
-        $ask2=$null; $ask2U=$null; $net2=$null; $holds=$false
-        if($bk[$be].asks.Count -ge 2){ $ask2=[double]$bk[$be].asks[1].p; $ask2U=[Math]::Round($ask2*[double]$bk[$be].asks[1].q,2); $net2=[Math]::Round((($bestB-$ask2)/$ask2*100)-$fees[$be]-$fees[$bestS],4); $holds=$net2 -ge $MIN }
+        $ask2=$a2; $ask2U=$null; if($a2 -and $bk[$be].asks.Count -ge 2){ $ask2U=[Math]::Round($a2*[double]$bk[$be].asks[1].q,2) }
         $key="$sym|$be"; $fill=$false
         if($tracked.ContainsKey($key)){ $prev=$tracked[$key]; if($prev.entry -and $ask -gt $prev.entry){ $fill=$true } }
         $tracked[$key]=@{entry=$entry; ask=$ask}
         if($worth -or $fill){
-          $sig=[ordered]@{symbol=$sym; buy_exchange=$be; sell_exchange=$bestS; entry_price=[Math]::Round($entry,8); ask_now=[Math]::Round($ask,8); ask_vol_usdt=[Math]::Round($askU,2); sell_bid=[Math]::Round($bestB,8); net_if_filled=[Math]::Round($net,2); worth=$worth; fill_suspected=$fill; ask_next=$ask2; ask_next_vol_usdt=$ask2U; net_lvl2=$net2; holds_lvl2=$holds; timestamp=([DateTime]::UtcNow.ToString("o")); pair_urls=@{buy=(Get-TradeUrl $be $sym); sell=(Get-TradeUrl $bestS $sym)}}
+          $sig=[ordered]@{symbol=$sym; buy_exchange=$be; sell_exchange=$bestS; entry_price=[Math]::Round($entry,8); buy_price=[Math]::Round($bp,8); buy_lvl=$bl; sell_price=[Math]::Round($bbP,8); sell_lvl=$sl; ask_now=[Math]::Round($ask,8); ask_vol_usdt=[Math]::Round($askU,2); sell_bid=[Math]::Round($bbP,8); net_if_filled=[Math]::Round($net,2); worth=$worth; fill_suspected=$fill; ask_next=$ask2; ask_next_vol_usdt=$ask2U; timestamp=([DateTime]::UtcNow.ToString("o")); pair_urls=@{buy=(Get-TradeUrl $be $sym); sell=(Get-TradeUrl $bestS $sym)}}
           $depth+=$sig
           if($fill){ Write-Host "  POSIBLE FILL $sym en $be a $($sig.entry_price) -> vende $bestS" -ForegroundColor Yellow; if(Push-Alert ([ordered]@{symbol=$sym; buy_exchange=$be; sell_exchange=$bestS; buy_price=$sig.entry_price; sell_price=$sig.sell_bid; gross_spread=$sig.net_if_filled; net_spread=$sig.net_if_filled; estimated_profit=[Math]::Round((($SIZE/$sig.entry_price)*$sig.sell_bid)-$SIZE,2); timestamp=$sig.timestamp; pair_urls=$sig.pair_urls; kind="fill"})){ $lastAlert[$sym]=Get-Date } }
-          elseif($worth){ Write-Host "  LIBRO FINO $sym $be askVol $($sig.ask_vol_usdt) USDT entrada $($sig.entry_price) neto $($sig.net_if_filled)%" -ForegroundColor Cyan }
+          elseif($worth){ Write-Host "  LIBRO FINO $sym compra ASK$($sig.buy_lvl) $be $($sig.buy_price) -> vende BID$($sig.sell_lvl) $bestS $($sig.sell_price) neto $($sig.net_if_filled)%" -ForegroundColor Cyan }
         }
       }
     }
