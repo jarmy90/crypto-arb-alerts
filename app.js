@@ -5,7 +5,8 @@ const DEPTH_URL = 'https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/m
 const WATCH = {
   exchanges: ['BINANCE','MEXC','BYBIT','OKX'],
   symbols: ['BTC/USDT','ETH/USDT','BNB/USDT','SOL/USDT','XRP/USDT','ADA/USDT','DOGE/USDT','DOT/USDT','POL/USDT','LTC/USDT','AVAX/USDT','LINK/USDT','UNI/USDT','ATOM/USDT','NEAR/USDT'],
-  minNet: 0.40, tradeSize: 500, feeBinance: 0.10, feeMexc: 0.05, feeBybit: 0.10, feeOkx: 0.10
+  minNet: 0.40, tradeSize: 500, feeBinance: 0.10, feeMexc: 0.05, feeBybit: 0.10, feeOkx: 0.10,
+  feeMakerBinance: 0.10, feeMakerMexc: 0.05, feeMakerBybit: 0.10, feeMakerOkx: 0.10
 };
 const CONFIG = { alertsUrl: GITHUB_URL, refreshInterval: 12000, maxRecentMinutes: 15 };
 
@@ -92,25 +93,83 @@ async function fetchAlerts(){
   finally{ isLoading=false; }
 }
 elements.refreshBtn.addEventListener('click',()=>{fetchAlerts();fetchLive();fetchDepth();});
+const STATE_COLOR={OBSERVAR:'warn',PREPARAR:'prep','POSIBLE FILL':'yes',RETIRAR:'bad'};
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function loadOrders(){ try{ return JSON.parse(localStorage.getItem('arb_orders')||'[]'); }catch(e){ return []; } }
+function saveOrders(o){ localStorage.setItem('arb_orders',JSON.stringify(o)); }
+function livePrice(sym, ex, side){
+  const L=window._liveRows||{};
+  const r=L[sym]; if(!r) return null;
+  const k=ex.toLowerCase()+'_'+side;
+  return r[k]!=null?Number(r[k]):null;
+}
+function takerFee(ex){ return ex==='MEXC'?WATCH.feeMexc:ex==='BYBIT'?WATCH.feeBybit:ex==='OKX'?(WATCH.feeOkx||0.10):WATCH.feeBinance; }
+function makerFee(ex){ return ex==='MEXC'?(WATCH.feeMakerMexc||0.05):ex==='BYBIT'?(WATCH.feeMakerBybit||0.10):ex==='OKX'?(WATCH.feeMakerOkx||0.10):(WATCH.feeMakerBinance||0.10); }
+function orderExitNet(o){
+  if(o.type==='COMPRA EN COLA'){
+    const px=livePrice(o.symbol,o.exitEx,'bid'); if(px==null) return null;
+    return ((px/o.price)-1)*100-makerFee(o.makerEx)-takerFee(o.exitEx)-0.05;
+  }
+  const px=livePrice(o.symbol,o.exitEx,'ask'); if(px==null) return null;
+  return ((o.price/px)-1)*100-makerFee(o.makerEx)-takerFee(o.exitEx)-0.05;
+}
+function renderOrders(){
+  const box=document.getElementById('ordersBox'); if(!box) return;
+  const orders=loadOrders();
+  if(!orders.length){ box.innerHTML='<div class="combo">Sin ordenes manuales. Pulsa HE PUESTO LA ORDEN en una senal para seguirla aqui.</div>'; return; }
+  let html='';
+  for(const o of orders){
+    const net=orderExitNet(o);
+    let verdict, cls;
+    if(o.status==='CANCELADA'){ verdict='CANCELADA'; cls='no'; }
+    else if(o.status==='COMPLETADA'){ verdict='COMPLETADA - ejecuta salida en '+o.exitEx; cls='yes'; }
+    else if(o.status==='PARCIAL'){ verdict='FILL PARCIAL - vigila resto'; cls='prep'; }
+    else if(net==null){ verdict='sin datos live'; cls='no'; }
+    else if(net>=WATCH.minNet){ verdict='OPORTUNIDAD VIGENTE +'+net.toFixed(2)+'% - MANTENER'; cls='yes'; }
+    else if(net>0){ verdict='floja +'+net.toFixed(2)+'% - vigilar'; cls='warn'; }
+    else { verdict='RETIRAR '+net.toFixed(2)+'% - cancela'; cls='bad'; }
+    html+='<div class="mkt"><div class="mkt-head"><span class="mkt-sym">'+esc(o.symbol)+' '+esc(o.side)+' '+esc(o.makerEx)+' @ '+esc(o.price)+'</span><span class="mkt-net '+cls+'">'+esc(verdict)+'</span></div>'
+    +'<div class="combo">Salida prevista: '+esc(o.exitEx)+' | puesta: '+esc(o.time||'')+' | estado: '+esc(o.status)+'</div>'
+    +'<div class="combo"><button data-act="done" data-id="'+o.id+'">ME HAN COMPLETADO</button> <button data-act="partial" data-id="'+o.id+'">FILL PARCIAL</button> <button data-act="cancel" data-id="'+o.id+'">CANCELE LA ORDEN</button></div></div>';
+  }
+  box.innerHTML=html;
+  box.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    const orders=loadOrders(); const o=orders.find(x=>x.id===b.dataset.id); if(!o) return;
+    if(b.dataset.act==='cancel') o.status='CANCELADA';
+    if(b.dataset.act==='done') o.status='COMPLETADA';
+    if(b.dataset.act==='partial'){ const q=prompt('Cantidad ejecutada (texto libre):',''); o.status='PARCIAL'; if(q) o.fillNote=q; }
+    saveOrders(orders); renderOrders();
+  }));
+}
+function placeOrderFromSignal(i){
+  const s=(window._signals||[])[i]; if(!s) return;
+  const orders=loadOrders();
+  orders.unshift({id:'o'+Date.now(), symbol:s.symbol, type:s.type, side:s.model==='A'?'BUY':'SELL', makerEx:s.maker_exchange, exitEx:s.exit_exchange, price:s.limit_price, qty:'', time:new Date().toLocaleString(), status:'EN COLA'});
+  saveOrders(orders); renderOrders();
+  document.getElementById('ordersBox').scrollIntoView();
+}
 async function fetchDepth(){
   try{
     const r=await fetch(DEPTH_URL+'?t='+Date.now(),{cache:'no-store'});
     if(!r.ok) throw new Error('HTTP '+r.status);
     const j=await r.json();
     const rows=j.signals||[];
+    window._signals=rows;
     let html='';
-    for(const s of rows.slice(0,15)){
-      const cls=s.fill_suspected?'arb':'';
-      const sideTxt=s.side?'<div class="combo">Lado a agotar: <b>'+s.side+'</b> (ASK '+s.ask_vol_usdt+' vs BID '+s.bid_vol_usdt+' USDT) - '+(s.side==='ASK'?'el ASK se come antes, el precio sube y tu BID te lo cogen':'el BID se come antes, el precio puede bajar, entras mas abajo')+'</div>':'';
-      const mkt=(s.mkt_net_lvl1!=null)?' Mercado directo ASK-&gt;BID daria <b>'+s.mkt_net_lvl1+'%</b>'+(s.mkt_net_lvl2!=null?' (nivel 2: '+s.mkt_net_lvl2+'%)':''):'';
-      const comboTxt='Tu flujo: entra en <b>COLA-BID '+s.buy_exchange+' '+(s.buy_price||s.entry_price)+'</b> -&gt; vende <b>BID '+s.sell_exchange+' '+s.sell_price+'</b> = <b>'+Number(s.net_if_filled).toFixed(2)+'%</b>'+mkt;
-      const nxt=(s.ask_next!=null)?'<div class="combo">Siguiente ASK en cola: <b>'+s.ask_next+'</b> ('+s.ask_next_vol_usdt+' USDT)</div>':'';
-      html+='<div class="mkt '+cls+'"><div class="mkt-head"><span class="mkt-sym">'+s.symbol+' - '+s.buy_exchange+' -&gt; '+s.sell_exchange+'</span><span class="mkt-net '+(s.fill_suspected?'yes':'no')+'">'+(s.fill_suspected?'POSIBLE FILL':Number(s.net_if_filled).toFixed(2)+'% si entra')+'</span></div>'
-      +sideTxt+'<div class="combo">Entrada limite sugerida <b>'+s.entry_price+'</b> (ask fino '+s.ask_vol_usdt+' USDT) - neto estimado <b>'+s.net_if_filled+'%</b></div>'+'<div class="combo">'+comboTxt+'</div>'+nxt+'</div>';
+    for(let i=0;i<rows.slice(0,15).length;i++){
+      const s=rows[i];
+      const cls=STATE_COLOR[s.state]||'no';
+      html+='<div class="mkt"><div class="mkt-head"><span class="mkt-sym">'+s.symbol+' - '+s.type+'</span><span class="mkt-net '+cls+'">'+s.state+'</span></div>'
+      +'<div class="combo">Maker <b>'+s.maker_exchange+'</b> limite <b>'+s.limit_price+'</b> -&gt; salida inmediata <b>'+s.exit_exchange+' '+s.exit_price+'</b> ['+s.model+']</div>'
+      +'<div class="combo">Cola delante: <b>'+(s.queue_ahead_usdt==null?'--':s.queue_ahead_usdt+' USDT')+'</b> - agotamiento <b>'+(s.depletion_rate==null?'--':s.depletion_rate+' USDT/s')+'</b> - fill estimado <b>'+(s.est_fill_s==null?'--':s.est_fill_s+' s')+'</b> - lecturas positivas <b>'+s.pos_reads+'</b> - edad <b>'+s.age_s+' s</b></div>'
+      +'<div class="combo">Bruto <b>'+s.gross+'%</b> - maker <b>'+s.maker_fee+'%</b> - taker <b>'+s.taker_fee+'%</b> - slippage <b>'+s.slippage+'%</b> - margen <b>'+s.safety+'%</b> = <b>NETO '+s.net+'%</b> - salida max <b>'+s.exit_vol_usdt+' USDT</b></div>'
+      +'<div class="combo">'+esc(s.state_reason||'')+'</div>'
+      +'<div class="combo"><a href="'+(s.pair_urls?s.pair_urls.buy:'#')+'" target="_blank" rel="noopener">Abrir '+s.maker_exchange+'</a> - <a href="'+(s.pair_urls?s.pair_urls.sell:'#')+'" target="_blank" rel="noopener">Abrir '+s.exit_exchange+'</a> <button data-sig="'+i+'">HE PUESTO LA ORDEN</button></div></div>';
     }
+    if(!rows.length) html='<div class="combo">Sin senales ahora. El bot publica cuando un modelo A/B da neto sobre el umbral con salida liquida.</div>';
     const books=j.books||[];
     if(books.length){
-      html+='<div class="combo" style="margin:.6rem 0">Siguiente en cola por mercado (top 3 asks/bids). Abre cada par:</div>';
+      html+='<div class="combo" style="margin:.6rem 0">Siguiente en cola por mercado (top 5 asks/bids, solo profundidad). Abre cada par:</div>';
       for(const b of books){
         let inner='';
         for(const ex of ['binance','mexc','bybit','okx']){
@@ -122,8 +181,10 @@ async function fetchDepth(){
         html+='<details style="margin:.3rem 0"><summary><b>'+b.symbol+'</b> - ver cola</summary><div style="font-size:.78rem">'+inner+'</div></details>';
       }
     }
-    if(elements.depthBox) elements.depthBox.innerHTML=html||'Sin libros finos ahora (ask &gt; '+j.thin_usdt+' USDT en los 15 mercados).';
+    if(elements.depthBox) elements.depthBox.innerHTML=html;
+    if(elements.depthBox) elements.depthBox.querySelectorAll('button[data-sig]').forEach(b=>b.addEventListener('click',()=>placeOrderFromSignal(Number(b.dataset.sig))));
     if(elements.depthTime) elements.depthTime.textContent=new Date(j.updated||Date.now()).toLocaleTimeString()+' ('+formatTimeAgo(j.updated||Date.now())+')';
+    renderOrders();
   }catch(e){ if(elements.depthBox) elements.depthBox.innerHTML='Depth aun no publicado - corre el bot para generarlo.'; }
 }
 async function fetchLive(){
@@ -146,8 +207,10 @@ async function fetchLive(){
       html+='<tr class="'+(ok?'arb':'')+'"><td class="sym">'+s.symbol.replace('/','')+'</td>'+td(bA,bA===minAsk?'bb':'')+td(bB,bB===maxBid?'bs':'')+td(mA,mA===minAsk?'bb':'')+td(mB,mB===maxBid?'bs':'')+(hasY?td(yA,yA===minAsk?'bb':'')+td(yB,yB===maxBid?'bs':''):'<td>--</td><td>--</td>')+(hasO?td(oA,oA===minAsk?'bb':'')+td(oB,oB===maxBid?'bs':''):'<td>--</td><td>--</td>')+'<td class="net '+(ok?'yes':'no')+'">'+Number(s.best).toFixed(2)+'%</td></tr>';
     }
     html+='</tbody></table></div><div class="combo">ASK=compro (naranja) - BID=vendo (azul) - verde=arb &gt;='+WATCH.minNet+'%</div>';
+    window._liveRows={}; rows.forEach(s=>{ window._liveRows[s.symbol]=s; });
     if(elements.liveBox) elements.liveBox.innerHTML=html||'sin datos';
     if(elements.liveTime) elements.liveTime.textContent=new Date(j.updated||Date.now()).toLocaleTimeString()+' ('+formatTimeAgo(j.updated||Date.now())+') - del bot';
+    renderOrders();
   }catch(e){ if(elements.liveBox) elements.liveBox.innerHTML='live aun no publicado por el bot - corre <b>.\\bot.ps1</b> para generarlo. ('+e.message+')'; }
 }
 function init(){ renderWatch(); fetchAlerts(); fetchLive(); fetchDepth(); setInterval(fetchAlerts,CONFIG.refreshInterval); setInterval(fetchLive,15000); setInterval(fetchDepth,30000); }
