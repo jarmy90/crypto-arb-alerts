@@ -36,6 +36,19 @@ $SAFE = [double](Get-Cfg "SAFETY_MARGIN" "0.05")
 $EXITMIN = [double](Get-Cfg "EXIT_MIN_USDT" "500")
 $PERSIST = [int](Get-Cfg "PERSIST_READS" "2")
 $MAXAGE = [int](Get-Cfg "MAX_DATA_AGE_S" "90")
+$LAT = [double](Get-Cfg "LATENCY_RISK" "0.05")
+$PRISK = [double](Get-Cfg "PARTIAL_FILL_RISK" "0.05")
+$EVOLK = [double](Get-Cfg "EXITVOL_K" "1.0")
+$SIZES = ((Get-Cfg "TRADE_SIZES" "25,50,100,250,500,1000").Split(",") | ForEach-Object { [double]$_.Trim() })
+$PRESIG_MS = [int](Get-Cfg "PRE_SIGNAL_MIN_MS" "2000")
+$PREP_MS = [int](Get-Cfg "PREPARE_MIN_MS" "4000")
+$GAP_MS = [int](Get-Cfg "MAX_SIGNAL_GAP_MS" "1000")
+$GAPSCAN_S = [int](Get-Cfg "MAX_SIGNAL_GAP_S" "300")
+$NEAR = [double](Get-Cfg "NEAR_BAND" "0.10")
+$QMAXAGE_MS = [int](Get-Cfg "DATA_MAX_AGE_MS" "2000")
+$SYNCMAX_MS = [int](Get-Cfg "SYNC_MAX_AGE_MS" "1500")
+$TFB = [double](Get-Cfg "FEE_TAKER_BINANCE" ([string]$FEE_B)); $TFM = [double](Get-Cfg "FEE_TAKER_MEXC" ([string]$FEE_M)); $TFY = [double](Get-Cfg "FEE_TAKER_BYBIT" ([string]$FEE_Y)); $TFO = [double](Get-Cfg "FEE_TAKER_OKX" ([string]$FEE_O))
+$FVB = [int](Get-Cfg "FEE_VERIFIED_BINANCE" "0"); $FVM = [int](Get-Cfg "FEE_VERIFIED_MEXC" "0"); $FVY = [int](Get-Cfg "FEE_VERIFIED_BYBIT" "0"); $FVO = [int](Get-Cfg "FEE_VERIFIED_OKX" "0")
 $lastDepth = [DateTime]::MinValue
 $hist = @{}
 . (Join-Path $PSScriptRoot "depth-common.ps1")
@@ -142,7 +155,7 @@ do {
   Write-Status "cycle-start"
   try {
   if($script:markets -eq $null -or ((Get-Date)-$script:marketsTs).TotalHours -ge 6){ Update-Markets (-not $Once) }
-  $fees=@{BINANCE=$FEE_B;MEXC=$FEE_M;BYBIT=$FEE_Y;OKX=$FEE_O}
+  $fees=@{BINANCE=$TFB;MEXC=$TFM;BYBIT=$TFY;OKX=$TFO}
   $live=@()
   foreach ($grp in $script:markets.groups) {
     $sym=$grp.normalized
@@ -196,7 +209,7 @@ do {
   } catch { Write-Host "  Live push error: $($_.Exception.Message)" -ForegroundColor Yellow }
   if(((Get-Date)-$lastDepth).TotalSeconds -ge $DINT){
     $lastDepth=Get-Date; $depth=@(); $books=@()
-    $cfg=@{MIN=$MIN; SIZE=$SIZE; THIN=$THIN; SAFE=$SAFE; EXITMIN=$EXITMIN; PERSIST=$PERSIST; MF=@{BINANCE=$MFB;MEXC=$MFM;BYBIT=$MFY;OKX=$MFO}; TF=@{BINANCE=$FEE_B;MEXC=$FEE_M;BYBIT=$FEE_Y;OKX=$FEE_O}}
+    $cfg=@{MIN=$MIN; SIZE=$SIZE; THIN=$THIN; SAFE=$SAFE; EXITMIN=$EXITMIN; PERSIST=$PERSIST; LAT=$LAT; PRISK=$PRISK; EVOLK=$EVOLK; SIZES=$SIZES; PRESIG_MS=$PRESIG_MS; PREP_MS=$PREP_MS; GAP_MS=$GAP_MS; GAPSCAN_S=$GAPSCAN_S; NEAR=$NEAR; QMAXAGE_MS=$QMAXAGE_MS; SYNCMAX_MS=$SYNCMAX_MS; FEESV=@{BINANCE=$FVB;MEXC=$FVM;BYBIT=$FVY;OKX=$FVO}; MF=@{BINANCE=$MFB;MEXC=$MFM;BYBIT=$MFY;OKX=$MFO}; TF=@{BINANCE=$TFB;MEXC=$TFM;BYBIT=$TFY;OKX=$TFO}}
     $now=Get-Date; $trN=0; $trO=0
     foreach($grp in $script:markets.groups){
       $sym=$grp.normalized
