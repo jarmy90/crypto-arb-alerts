@@ -8,6 +8,24 @@ $MIN=[double](Get-Cfg $map "MIN_NET_SPREAD" "0.40"); $SIZE=[double](Get-Cfg $map
 $FB=[double](Get-Cfg $map "FEE_BINANCE" "0.10"); $FM=[double](Get-Cfg $map "FEE_MEXC" "0.05"); $FY=[double](Get-Cfg $map "FEE_BYBIT" "0.10"); $FO=[double](Get-Cfg $map "FEE_OKX" "0.10")
 $WAIT=[int](Get-Cfg $map "CHECK_INTERVAL" "8"); $COOL=[int](Get-Cfg $map "COOLDOWN_SECONDS" "90")
 $MAXA=[int](Get-Cfg $map "MAX_ALERTS" "50")
+$THIN=[double](Get-Cfg $map "THIN_BOOK_USDT" "1000")
+$DINT=[int](Get-Cfg $map "DEPTH_INTERVAL" "30")
+$lastDepth=[DateTime]::MinValue
+$tracked=@{}
+function Get-Depth($ex,$sym){
+  $s=$sym.Replace("/",""); $oid=$sym.Replace("/","-")
+  try{
+    if($ex -eq "BINANCE"){ $d=Invoke-RestMethod "https://api.binance.com/api/v3/depth?symbol=$s&limit=5" -TimeoutSec 10; return @{ask=[double]$d.asks[0][0]; askQ=[double]$d.asks[0][1]; bid=[double]$d.bids[0][0]; bidQ=[double]$d.bids[0][1]} }
+    if($ex -eq "MEXC"){ $d=Invoke-RestMethod "https://api.mexc.com/api/v3/depth?symbol=$s&limit=5" -TimeoutSec 10; return @{ask=[double]$d.asks[0][0]; askQ=[double]$d.asks[0][1]; bid=[double]$d.bids[0][0]; bidQ=[double]$d.bids[0][1]} }
+    if($ex -eq "BYBIT"){ $d=Invoke-RestMethod "https://api.bybit.com/v5/market/orderbook?category=spot&symbol=$s&limit=5" -TimeoutSec 10; $a=$d.result.a[0]; $b2=$d.result.b[0]; return @{ask=[double]$a[0]; askQ=[double]$a[1]; bid=[double]$b2[0]; bidQ=[double]$b2[1]} }
+    $d=Invoke-RestMethod "https://www.okx.com/api/v5/market/books?instId=$oid&sz=5" -TimeoutSec 10; $asks=$d.data[0].asks; $bids=$d.data[0].bids
+    $ba=($asks | ForEach-Object { [double]$_[0] } | Measure-Object -Minimum).Minimum
+    $baQ=0; foreach($r in $asks){ if([double]$r[0] -eq $ba){ $baQ=[double]$r[1]; break } }
+    $bb=($bids | ForEach-Object { [double]$_[0] } | Measure-Object -Maximum).Maximum
+    $bbQ=0; foreach($r in $bids){ if([double]$r[0] -eq $bb){ $bbQ=[double]$r[1]; break } }
+    return @{ask=$ba; askQ=$baQ; bid=$bb; bidQ=$bbQ}
+  }catch{ return $null }
+}
 $SYMS=(Get-Cfg $map "SYMBOLS" "BTC/USDT,ETH/USDT,BNB/USDT,SOL/USDT,XRP/USDT,ADA/USDT,DOGE/USDT").Split(",") | ForEach-Object{$_.Trim()}
 $last=@{}
 if(-not (Test-Path "data")){ New-Item -ItemType Directory data | Out-Null }
@@ -55,6 +73,36 @@ do{
   }
   Write-Host "Fin scan #$n. Guardado en data/alerts.json"
   @{ updated=([DateTime]::UtcNow.ToString("o")); symbols=$live } | ConvertTo-Json -Depth 5 | Set-Content "data/live.json" -Encoding UTF8
+  if(((Get-Date)-$lastDepth).TotalSeconds -ge $DINT){
+    $lastDepth=Get-Date; $depth=@()
+    $fees=@{BINANCE=$FB;MEXC=$FM;BYBIT=$FY;OKX=$FO}
+    foreach($sym in $SYMS){
+      $bk=@{}
+      foreach($ex in @("BINANCE","MEXC","BYBIT","OKX")){ $q=Get-Depth $ex $sym; if($q){ $bk[$ex]=$q } }
+      if($bk.Count -lt 2){ continue }
+      foreach($be in $bk.Keys){
+        $ask=$bk[$be].ask; $askU=$ask*$bk[$be].askQ
+        if($askU -gt $THIN){ continue }
+        $entry=$bk[$be].bid
+        $bestS=""; $bestB=0
+        foreach($se in $bk.Keys){ if($se -eq $be){continue}; if($bk[$se].bid -gt $bestB){ $bestB=$bk[$se].bid; $bestS=$se } }
+        if(-not $bestS){ continue }
+        $net=(($bestB-$entry)/$entry*100)-$fees[$be]-$fees[$bestS]
+        $worth=$net -ge $MIN
+        $key="$sym|$be"; $fill=$false
+        if($tracked.ContainsKey($key)){ $prev=$tracked[$key]; if($prev.entry -and $ask -gt $prev.entry){ $fill=$true } }
+        $tracked[$key]=@{entry=$entry; ask=$ask}
+        if($worth -or $fill){
+          $sig=[ordered]@{symbol=$sym; buy_exchange=$be; sell_exchange=$bestS; entry_price=[Math]::Round($entry,8); ask_now=[Math]::Round($ask,8); ask_vol_usdt=[Math]::Round($askU,2); sell_bid=[Math]::Round($bestB,8); net_if_filled=[Math]::Round($net,2); worth=$worth; fill_suspected=$fill; timestamp=([DateTime]::UtcNow.ToString("o")); pair_urls=@{buy=(Get-TradeUrl $be $sym); sell=(Get-TradeUrl $bestS $sym)}}
+          $depth+=$sig
+          if($fill){ $f=[ordered]@{symbol=$sym; buy_exchange=$be; sell_exchange=$bestS; buy_price=$sig.entry_price; sell_price=$sig.sell_bid; gross_spread=$sig.net_if_filled; net_spread=$sig.net_if_filled; estimated_profit=[Math]::Round((($SIZE/$sig.entry_price)*$sig.sell_bid)-$SIZE,2); timestamp=$sig.timestamp; pair_urls=$sig.pair_urls; kind="fill"}; Save-Local $f; $last[$sym]=Get-Date; Write-Host "  POSIBLE FILL $sym en $be a $($sig.entry_price) -> vende $bestS" -ForegroundColor Yellow }
+          elseif($worth){ Write-Host "  LIBRO FINO $sym $be askVol $($sig.ask_vol_usdt) USDT entrada $($sig.entry_price) neto $($sig.net_if_filled)%" -ForegroundColor Cyan }
+        }
+      }
+    }
+    @{ updated=([DateTime]::UtcNow.ToString("o")); thin_usdt=$THIN; signals=$depth } | ConvertTo-Json -Depth 6 | Set-Content "data/depth.json" -Encoding UTF8
+    Write-Host "Depth guardado ($($depth.Count) senales)"
+  }
   if($Once){break}
   Start-Sleep -Seconds $WAIT
 }while($true)
