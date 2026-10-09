@@ -34,11 +34,11 @@
             </div>
             <div class="status">
                 <div class="status-indicator"><span class="status-dot" id="statusDot"></span><span class="status-text" id="statusText">Conectando...</span></div>
-                <div class="last-update">Ultima lectura: <span id="lastUpdate">—</span></div>
+                <div class="last-update">Ultima lectura: <span id="lastUpdate">-</span></div>
             </div>
         </header>
         <div class="watch">
-            <b>Precio live del bot (<span id="liveTime">—</span>):</b>
+            <b>Precio live del bot (<span id="liveTime">-</span>):</b>
             <div class="cfg">Naranja = mejor ASK (compra mas barata) · Azul = mejor BID (venta mas cara). Fila verde = arbitraje igual o mayor a 0.40% neto.</div>
             <div id="liveBox" style="margin-top:.75rem">cargando...</div>
         </div>
@@ -50,8 +50,8 @@
         </div>
         <div class="stats">
             <div class="stat-card"><div class="stat-label">Alertas activas</div><div class="stat-value" id="activeCount">0</div></div>
-            <div class="stat-card"><div class="stat-label">Mejor spread neto</div><div class="stat-value" id="bestSpread">—</div></div>
-            <div class="stat-card"><div class="stat-label">Top profit</div><div class="stat-value" id="topProfit">—</div></div>
+            <div class="stat-card"><div class="stat-label">Mejor spread neto</div><div class="stat-value" id="bestSpread">-</div></div>
+            <div class="stat-card"><div class="stat-label">Top profit</div><div class="stat-value" id="topProfit">-</div></div>
         </div>
         <main class="alerts-section">
             <div class="section-header"><h2>Oportunidades activas (ultimos 15 min)</h2><button class="refresh-btn" id="refreshBtn" title="Actualizar">Actualizar</button></div>
@@ -65,3 +65,4 @@
     <script src="app.js?v=7"></script>
 </body>
 </html>
+
