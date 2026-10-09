@@ -24,6 +24,7 @@ $MIN   = [double](Get-Cfg "MIN_NET_SPREAD" "0.40")
 $SIZE  = [double](Get-Cfg "TRADE_SIZE_USDT" "500")
 $FEE_B = [double](Get-Cfg "FEE_BINANCE" "0.10")
 $FEE_M = [double](Get-Cfg "FEE_MEXC" "0.05")
+$FEE_Y = [double](Get-Cfg "FEE_BYBIT" "0.10")
 $WAIT  = [int](Get-Cfg "CHECK_INTERVAL" "8")
 $COOL  = [int](Get-Cfg "COOLDOWN_SECONDS" "90")
 $MAXA  = [int](Get-Cfg "MAX_ALERTS" "50")
@@ -35,10 +36,17 @@ $H = @{ Authorization = "Bearer $TOKEN"; Accept = "application/vnd.github+json";
 
 function Get-Prices($sym) {
   $s = $sym.Replace("/","")
-  $b = $null; $m = $null
+  $b = $null; $m = $null; $yB = $null; $yA = $null
   try { $b = Invoke-RestMethod "https://api.binance.com/api/v3/ticker/bookTicker?symbol=$s" -TimeoutSec 10 } catch { Write-Host "  Binance $sym error: $($_.Exception.Message)" }
   try { $m = Invoke-RestMethod "https://api.mexc.com/api/v3/ticker/bookTicker?symbol=$s" -TimeoutSec 10 } catch { Write-Host "  MEXC $sym error: $($_.Exception.Message)" }
-  return @{ B=$b; M=$m }
+  try { $y = Invoke-RestMethod "https://api.bybit.com/v5/market/tickers?category=spot&symbol=$s" -TimeoutSec 10; $t=$y.result.list[0]; $yB=[double]$t.bid1Price; $yA=[double]$t.ask1Price } catch { Write-Host "  Bybit $sym error: $($_.Exception.Message)" }
+  return @{ B=$b; M=$m; YB=$yB; YA=$yA }
+}
+function Get-TradeUrl($ex,$sym){
+  $uf=$sym.Replace("/","_"); $parts=$sym.Split("/"); $base=$parts[0]; $quote=$parts[1]
+  if($ex -eq "BINANCE"){ return "https://www.binance.com/en/trade/${uf}?type=spot" }
+  if($ex -eq "MEXC"){ return "https://www.mexc.com/exchange/${uf}" }
+  return "https://www.bybit.com/en/trade/spot/${base}/${quote}"
 }
 function Push-Alert($alert) {
   $url = "https://api.github.com/repos/$REPO/contents/$PATHF"
@@ -75,28 +83,26 @@ do {
     if (-not $p.B -or -not $p.M) { continue }
     $bAsk=[double]$p.B.askPrice; $bBid=[double]$p.B.bidPrice
     $mAsk=[double]$p.M.askPrice; $mBid=[double]$p.M.bidPrice
-    if ($bAsk -le 0 -or $mAsk -le 0) { continue }
-    # Dir1: compra Binance, vende MEXC
-    $g1 = ($mBid - $bAsk)/$bAsk*100; $n1 = $g1 - $FEE_B - $FEE_M
-    # Dir2: compra MEXC, vende Binance
-    $g2 = ($bBid - $mAsk)/$mAsk*100; $n2 = $g2 - $FEE_M - $FEE_B
-    $best = [Math]::Max($n1,$n2)
-    $live += [ordered]@{symbol=$sym; binance_bid=$bBid; binance_ask=$bAsk; mexc_bid=$mBid; mexc_ask=$mAsk; net1=[Math]::Round($n1,4); net2=[Math]::Round($n2,4); best=[Math]::Round($best,4)}
+    $yB=[double]$p.YB; $yA=[double]$p.YA
+    if ($bAsk -le 0 -or $mAsk -le 0 -or $yA -le 0) { continue }
+    $px=@{BINANCE=@{bid=$bBid;ask=$bAsk;fee=$FEE_B};MEXC=@{bid=$mBid;ask=$mAsk;fee=$FEE_M};BYBIT=@{bid=$yB;ask=$yA;fee=$FEE_Y}}
+    $nn=-999; $bx=""; $sx=""; $bp=0; $sp=0; $g=0; $fb=0; $fs=0; $best=-999
+    foreach($be in $px.Keys){ foreach($se in $px.Keys){ if($be -eq $se){continue}
+      $gg=(($px[$se].bid-$px[$be].ask)/$px[$be].ask*100); $qq=$gg-$px[$be].fee-$px[$se].fee
+      if($qq -gt $best){ $best=$qq; $bx=$be; $sx=$se; $bp=$px[$be].ask; $sp=$px[$se].bid; $g=$gg; $nn=$qq; $fb=$px[$be].fee; $fs=$px[$se].fee }
+    }}
+    $live += [ordered]@{symbol=$sym; binance_bid=$bBid; binance_ask=$bAsk; mexc_bid=$mBid; mexc_ask=$mAsk; bybit_bid=$yB; bybit_ask=$yA; best=[Math]::Round($best,4); best_buy=$bx; best_sell=$sx}
     if ($lastAlert.ContainsKey($sym) -and ((Get-Date) - $lastAlert[$sym]).TotalSeconds -lt $COOL) { continue }
     if ($best -ge $MIN) {
-      if ($n1 -ge $n2) { $bx="BINANCE"; $sx="MEXC"; $bp=$bAsk; $sp=$mBid; $g=$g1; $nn=$n1; $fb=$FEE_B; $fs=$FEE_M }
-      else { $bx="MEXC"; $sx="BINANCE"; $bp=$mAsk; $sp=$bBid; $g=$g2; $nn=$n2; $fb=$FEE_M; $fs=$FEE_B }
       $amt = $SIZE/$bp; $net = $amt*(1-$fb/100); $usdt = $net*$sp; $netU = $usdt*(1-$fs/100); $profit = $netU - $SIZE
-      $sf = $sym.Replace("/",""); $uf = $sym.Replace("/","_")
       $alert = [ordered]@{
         symbol=$sym; buy_exchange=$bx; sell_exchange=$sx
         buy_price=[Math]::Round($bp,8); sell_price=[Math]::Round($sp,8)
         gross_spread=[Math]::Round($g,2); net_spread=[Math]::Round($nn,2)
         estimated_profit=[Math]::Round($profit,2)
         timestamp=([DateTime]::UtcNow.ToString("o"))
-        pair_urls=@{ buy="https://www.binance.com/en/trade/${uf}?type=spot"; sell="https://www.mexc.com/exchange/${uf}" }
+        pair_urls=@{ buy=(Get-TradeUrl $bx $sym); sell=(Get-TradeUrl $sx $sym) }
       }
-      if ($bx -eq "MEXC") { $alert.pair_urls.buy="https://www.mexc.com/exchange/${uf}"; $alert.pair_urls.sell="https://www.binance.com/en/trade/${uf}?type=spot" }
       Write-Host "  OPORTUNIDAD $sym | Compra $bx $bp | Vende $sx $sp | Neto $([Math]::Round($nn,2))% | +`$$([Math]::Round($profit,2))" -ForegroundColor Green
       if (Push-Alert $alert) { Write-Host "  Publicado en GitHub" -ForegroundColor Cyan; $lastAlert[$sym]=Get-Date } else { Write-Host "  Fallo al publicar" -ForegroundColor Red }
     }
