@@ -28,39 +28,40 @@
     <div class="container">
         <header class="header">
             <div class="header-content">
-                <h1 class="title"><span class="icon">📊</span>Crypto Arbitrage Detector <span class="ver">v4 compact</span></h1>
-                <p class="subtitle">Solo detección entre <b>Binance</b> ↔ <b>MEXC</b> ↔ <b>Bybit</b> (spot). No ejecuta trades.</p>
+                <h1 class="title"><span class="icon">ðŸ“Š</span>Crypto Arbitrage Detector <span class="ver">v4 compact</span></h1>
+                <p class="subtitle">Solo detecciÃ³n entre <b>Binance</b> â†” <b>MEXC</b> â†” <b>Bybit</b> (spot). No ejecuta trades.</p>
             </div>
             <div class="status">
                 <div class="status-indicator"><span class="status-dot" id="statusDot"></span><span class="status-text" id="statusText">Conectando...</span></div>
-                <div class="last-update">Última lectura: <span id="lastUpdate">—</span></div>
+                <div class="last-update">Ãšltima lectura: <span id="lastUpdate">â€”</span></div>
             </div>
         </header>
         <div class="watch">
-            <b>🔴 DOM compacto — 15 mercados de un vistazo (<span id="liveTime">—</span>):</b>
-            <div class="cfg">Verde = mejor ASK (compra más barata) y mejor BID (venta más cara). Tarjeta <b style="color:#10b981">verde</b> = hay arbitraje ≥0.40% neto. <b style="color:#f59e0b">Amarillo</b> = mejor combinación actual aunque no llegue al umbral.</div>
+            <b>ðŸ”´ DOM compacto â€” 15 mercados de un vistazo (<span id="liveTime">â€”</span>):</b>
+            <div class="cfg">Verde = mejor ASK (compra mÃ¡s barata) y mejor BID (venta mÃ¡s cara). Tarjeta <b style="color:#10b981">verde</b> = hay arbitraje â‰¥0.40% neto. <b style="color:#f59e0b">Amarillo</b> = mejor combinaciÃ³n actual aunque no llegue al umbral.</div>
             <div id="liveBox" style="margin-top:.75rem">cargando...</div>
         </div>
         <div class="watch">
-            <b>👁️ Vigilando 15 activos:</b>
+            <b>ðŸ‘ï¸ Vigilando 15 activos:</b>
             <div id="watchList" style="margin-top:.5rem"></div>
             <div class="cfg" id="cfgLine"></div>
-            <div class="cfg">Fuente: <a href="https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/live.json" target="_blank" style="color:#3b82f6">data/live.json</a> · <a href="https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/alerts.json" target="_blank" style="color:#3b82f6">data/alerts.json</a> · <a href="https://github.com/jarmy90/crypto-arb-alerts" target="_blank" style="color:#3b82f6">repo</a> · Si no ves cambios pulsa Ctrl+F5</div>
+            <div class="cfg">Fuente: <a href="https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/live.json" target="_blank" style="color:#3b82f6">data/live.json</a> Â· <a href="https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/alerts.json" target="_blank" style="color:#3b82f6">data/alerts.json</a> Â· <a href="https://github.com/jarmy90/crypto-arb-alerts" target="_blank" style="color:#3b82f6">repo</a> Â· Si no ves cambios pulsa Ctrl+F5</div>
         </div>
         <div class="stats">
             <div class="stat-card"><div class="stat-label">Alertas activas</div><div class="stat-value" id="activeCount">0</div></div>
-            <div class="stat-card"><div class="stat-label">Mejor spread neto</div><div class="stat-value" id="bestSpread">—</div></div>
-            <div class="stat-card"><div class="stat-label">Top profit</div><div class="stat-value" id="topProfit">—</div></div>
+            <div class="stat-card"><div class="stat-label">Mejor spread neto</div><div class="stat-value" id="bestSpread">â€”</div></div>
+            <div class="stat-card"><div class="stat-label">Top profit</div><div class="stat-value" id="topProfit">â€”</div></div>
         </div>
         <main class="alerts-section">
-            <div class="section-header"><h2>Oportunidades activas (últimos 15 min)</h2><button class="refresh-btn" id="refreshBtn" title="Actualizar">↻</button></div>
+            <div class="section-header"><h2>Oportunidades activas (Ãºltimos 15 min)</h2><button class="refresh-btn" id="refreshBtn" title="Actualizar">â†»</button></div>
             <div id="alertsContainer" class="alerts-grid"></div>
-            <div id="emptyState" class="empty-state" style="display:none"><div class="empty-icon">🔍</div><h3>Sin spread ahora mismo</h3><p>Escaneando...</p></div>
-            <div id="errorState" class="error-state" style="display:none"><div class="error-icon">⚠️</div><h3>Sin conexión</h3><p id="errorMessage"></p></div>
-            <div id="historyBox" style="display:none;margin-top:2rem"><h3 style="margin-bottom:1rem">📜 Histórico (no operable)</h3><div id="historyContainer" class="alerts-grid"></div></div>
+            <div id="emptyState" class="empty-state" style="display:none"><div class="empty-icon">ðŸ”</div><h3>Sin spread ahora mismo</h3><p>Escaneando...</p></div>
+            <div id="errorState" class="error-state" style="display:none"><div class="error-icon">âš ï¸</div><h3>Sin conexiÃ³n</h3><p id="errorMessage"></p></div>
+            <div id="historyBox" style="display:none;margin-top:2rem"><h3 style="margin-bottom:1rem">ðŸ“œ HistÃ³rico (no operable)</h3><div id="historyContainer" class="alerts-grid"></div></div>
         </main>
-        <footer class="footer"><p>⚠️ Solo detección, no es consejo financiero.</p><p>Compra en ASK, vende en BID · Neto = (bid−ask)/ask×100 − fees · refresh 12s</p></footer>
+        <footer class="footer"><p>âš ï¸ Solo detecciÃ³n, no es consejo financiero.</p><p>Compra en ASK, vende en BID Â· Neto = (bidâˆ’ask)/askÃ—100 âˆ’ fees Â· refresh 12s</p></footer>
     </div>
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=4"></script>
 </body>
 </html>
+
