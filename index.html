@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Arbitraje crypto en vivo entre Binance, MEXC, Bybit y OKX">
-    <title>Crypto Arbitrage Detector | Live v13</title>
-    <link rel="stylesheet" href="style.css?v=13">
+    <meta name="description" content="Arbitraje crypto entre Binance, MEXC, Bybit y OKX. Solo con bot activo.">
+    <title>Crypto Arbitrage Detector | v13.1</title>
+    <link rel="stylesheet" href="style.css?v=13.1">
     <style>
-    .watch{background:#1a1f2e;border:1px solid #374151;border-radius:1rem;padding:1rem;margin-bottom:1.5rem}
+    .watch{background:#1a1f2e;border:1px solid #374151;border-radius:1rem;padding:1rem;margin-bottom:1.5rem;position:relative}
     .pair-chip{display:inline-block;background:#242b3d;border:1px solid #374151;border-radius:.5rem;padding:.15rem .5rem;margin:.15rem;font-size:.78rem}
     .cfg{color:#9ca3af;font-size:.8rem;margin-top:.6rem}
     .alert-card a{color:#3b82f6;font-size:.8rem;text-decoration:none}
@@ -22,6 +22,9 @@
     .live-table tr.arb td.bs{background:#0ea5e9;color:#fff;font-size:.95rem}
     .live-table td.net{font-weight:800;color:#e5e7eb;font-size:.88rem}
     .live-table td.net.yes{color:#10b981}
+    .dim{opacity:.45}
+    .stale-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;background:rgba(15,20,25,.72);border-radius:1rem;z-index:5;text-align:center;padding:1rem}
+    .stale-overlay b{color:#ef4444;font-size:1.1rem}
     .mkt{background:#242b3d;border:1px solid #374151;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem}
     .mkt-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;gap:.5rem}
     .mkt-sym{font-weight:700}
@@ -34,61 +37,76 @@
     .combo{font-size:.8rem;color:#9ca3af;margin-top:.35rem}
     .combo b{color:#e7eaf0}
     .combo button,.mkt button{background:#3b82f6;color:#fff;border:0;border-radius:.4rem;padding:.3rem .6rem;margin:.15rem .15rem 0 0;cursor:pointer;font-size:.78rem}
-    .combo{font-size:.78rem;color:#9ca3af;margin-top:.4rem}
+    .combo button:disabled,.mkt button:disabled{background:#4b5563;cursor:not-allowed}
+    .tabs{display:flex;gap:.5rem;margin-bottom:1rem}
+    .tabs button{background:#242b3d;color:#9ca3af;border:1px solid #374151;border-radius:.5rem;padding:.4rem 1rem;cursor:pointer;font-size:.9rem}
+    .tabs button.on{background:#3b82f6;color:#fff}
+    .sysbadge{font-size:1rem}
     </style>
 </head>
 <body>
     <div class="container">
         <header class="header">
             <div class="header-content">
-                <h1 class="title"><span class="icon">[CHART]</span>Crypto Arbitrage Detector <span class="ver">v13 · 4 exchanges</span> <span id="verBadge"></span></h1>
+                <h1 class="title"><span class="icon">[CHART]</span>Crypto Arbitrage Detector <span class="ver">v13.1 · 4 exchanges</span> <span id="sysBadge" class="sysbadge"></span></h1>
                 <p class="subtitle">Solo deteccion entre <b>Binance</b> - <b>MEXC</b> - <b>Bybit</b> - <b>OKX</b> (spot). No ejecuta trades.</p>
-            </div>
-            <div class="status">
-                <div class="status-indicator"><span class="status-dot" id="statusDot"></span><span class="status-text" id="statusText">Conectando...</span></div>
-                <div class="last-update">Ultima lectura: <span id="lastUpdate">-</span></div>
+                <p class="cfg">Los precios solo se actualizan mientras el bot esta ejecutandose en un PC. Recargar la pagina no genera datos nuevos.</p>
             </div>
         </header>
         <div class="watch">
-            <b>Version y estado:</b>
+            <b>1. Estado del sistema:</b>
             <div id="verBox" style="margin-top:.5rem">cargando...</div>
         </div>
-        <div class="watch">
-            <b>Precio live del bot (<span id="liveTime">-</span>):</b>
+        <div class="tabs">
+            <button id="tabBtnLive" class="on">LIVE</button>
+            <button id="tabBtnHist">HISTORICO / PAPER</button>
+        </div>
+        <div id="tabLive">
+        <div class="watch" id="priceWatch">
+            <b><span id="priceTitle">Tabla de precios</span> <span id="priceAge" class="cfg"></span></b>
             <div class="cfg">Naranja = mejor ASK (compra mas barata) · Azul = mejor BID (venta mas cara). Fila verde = arbitraje igual o mayor a 0.40% neto.</div>
             <div id="liveBox" style="margin-top:.75rem">cargando...</div>
+            <div id="tableOverlay"></div>
         </div>
         <div class="watch">
-            <b>Modelos maker: COMPRA EN COLA y VENTA EN COLA (<span id="depthTime">-</span>):</b>
+            <b>3. Oportunidades maker actuales <span id="depthTime" class="cfg"></span></b>
             <div class="cfg">Una sola pata en cola (LIMIT). La otra sale inmediata (TAKER). Neto = bruto - fee maker - fee taker - slippage salida - margen. Amarillo=OBSERVAR, naranja=PREPARAR, verde=POSIBLE FILL, rojo=RETIRAR. Sin claves: POSIBLE FILL, nunca confirmado.</div>
             <div id="depthBox" style="margin-top:.75rem">cargando...</div>
         </div>
         <div class="watch">
-            <b>Mis ordenes manuales (solo este navegador):</b>
-            <div class="cfg">Pulsa HE PUESTO LA ORDEN en una senal. La web vigila si la salida sigue rentable: MANTENER, EJECUTAR o RETIRAR. No ejecuta nada.</div>
+            <b>4. Mis ordenes manuales (solo este navegador):</b>
+            <div class="cfg">Pulsa HE PUESTO LA ORDEN en una senal LIVE. La web vigila si la salida sigue rentable: MANTENER, EJECUTAR o RETIRAR. No ejecuta nada.</div>
             <div id="ordersBox" style="margin-top:.75rem">cargando...</div>
         </div>
         <div class="watch">
-            <b>Vigilando 15 activos:</b>
+            <b>2/5. Activos y salud de exchanges:</b>
             <div id="watchList" style="margin-top:.5rem"></div>
             <div class="cfg" id="cfgLine"></div>
-            <div class="cfg">Fuente: <a href="https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/live.json" target="_blank" style="color:#3b82f6">data/live.json</a> · <a href="https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/alerts.json" target="_blank" style="color:#3b82f6">data/alerts.json</a> · <a href="https://github.com/jarmy90/crypto-arb-alerts" target="_blank" style="color:#3b82f6">repo</a> · Si no ves cambios pulsa Ctrl+F5</div>
+            <div class="cfg" id="healthLine"></div>
+            <div class="cfg">Fuente: <a href="https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/live.json" target="_blank" style="color:#3b82f6">data/live.json</a> · <a href="https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/depth.json" target="_blank" style="color:#3b82f6">data/depth.json</a> · <a href="https://raw.githubusercontent.com/jarmy90/crypto-arb-alerts/main/data/status.json" target="_blank" style="color:#3b82f6">data/status.json</a> · <a href="https://github.com/jarmy90/crypto-arb-alerts" target="_blank" style="color:#3b82f6">repo</a> · Si no ves cambios pulsa Ctrl+F5</div>
+        </div>
+        </div>
+        <div id="tabHist" style="display:none">
+        <div class="watch">
+            <b>HISTORICO / PAPER (NO OPERABLE):</b>
+            <div class="cfg">Alertas pasadas. No sirven para operar: los precios ya cambiaron. Sirven para revisar y para paper trading.</div>
         </div>
         <div class="stats">
-            <div class="stat-card"><div class="stat-label">Alertas activas</div><div class="stat-value" id="activeCount">0</div></div>
-            <div class="stat-card"><div class="stat-label">Mejor spread neto</div><div class="stat-value" id="bestSpread">-</div></div>
-            <div class="stat-card"><div class="stat-label">Top profit</div><div class="stat-value" id="topProfit">-</div></div>
+            <div class="stat-card"><div class="stat-label">Alertas historicas</div><div class="stat-value" id="activeCount">0</div></div>
+            <div class="stat-card"><div class="stat-label">Mejor spread historico</div><div class="stat-value" id="bestSpread">-</div></div>
+            <div class="stat-card"><div class="stat-label">Top profit historico</div><div class="stat-value" id="topProfit">-</div></div>
         </div>
         <main class="alerts-section">
-            <div class="section-header"><h2>Oportunidades activas (ultimos 15 min)</h2><button class="refresh-btn" id="refreshBtn" title="Actualizar">Actualizar</button></div>
+            <div class="section-header"><h2>Historico</h2><button class="refresh-btn" id="refreshBtn" title="Recargar">Recargar</button></div>
+            <div class="cfg" id="refreshNote" style="margin-bottom:.75rem"></div>
             <div id="alertsContainer" class="alerts-grid"></div>
-            <div id="emptyState" class="empty-state" style="display:none"><div class="empty-icon">...</div><h3>Sin spread ahora mismo</h3><p>Escaneando...</p></div>
+            <div id="emptyState" class="empty-state" style="display:none"><div class="empty-icon">...</div><h3>Sin historico</h3><p>Aun no hay alertas guardadas.</p></div>
             <div id="errorState" class="error-state" style="display:none"><div class="error-icon">!</div><h3>Sin conexion</h3><p id="errorMessage"></p></div>
-            <div id="historyBox" style="display:none;margin-top:2rem"><h3 style="margin-bottom:1rem">Historico (no operable)</h3><div id="historyContainer" class="alerts-grid"></div></div>
+            <div id="historyBox" style="display:none;margin-top:2rem"><h3 style="margin-bottom:1rem">Todas (no operable)</h3><div id="historyContainer" class="alerts-grid"></div></div>
         </main>
-        <footer class="footer"><p>Solo deteccion, no es consejo financiero.</p><p>Compra en ASK, vende en BID · Neto = (bid-ask)/ask x 100 - fees · refresh 12s</p></footer>
+        </div>
+        <footer class="footer"><p>Solo deteccion, no es consejo financiero.</p><p>Compra en ASK, vende en BID · Neto = (bid-ask)/ask x 100 - fees · El bot debe estar activo para datos actuales.</p></footer>
     </div>
-    <script src="app.js?v=13"></script>
+    <script src="app.js?v=13.1"></script>
 </body>
 </html>
-
