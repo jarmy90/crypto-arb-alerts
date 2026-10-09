@@ -101,9 +101,11 @@ async function fetchDepth(){
     let html='';
     for(const s of rows.slice(0,15)){
       const cls=s.fill_suspected?'arb':'';
-      const nxt=(s.ask_next!=null)?'<div class="combo">Siguiente en cola ASK2 <b>'+s.ask_next+'</b> ('+s.ask_next_vol_usdt+' USDT) - neto si compras ahi <b>'+s.net_lvl2+'%</b> - '+(s.holds_lvl2?'AGUANTA aunque se coman el nivel 1':'NO aguanta si sube al nivel 2')+'</div>':'';
+      const bl=s.buy_lvl||1, sl=s.sell_lvl||1;
+      const comboTxt='Mejor combo: compra <b>ASK'+bl+' '+s.buy_exchange+' '+(s.buy_price||s.entry_price)+'</b> -&gt; vende <b>BID'+sl+' '+s.sell_exchange+' '+s.sell_price+'</b>'+((bl>1||sl>1)?' (usa nivel 2 de cola)':' (nivel 1)');
+      const nxt=(s.ask_next!=null)?'<div class="combo">Siguiente ASK en cola: <b>'+s.ask_next+'</b> ('+s.ask_next_vol_usdt+' USDT)</div>':'';
       html+='<div class="mkt '+cls+'"><div class="mkt-head"><span class="mkt-sym">'+s.symbol+' - '+s.buy_exchange+' -&gt; '+s.sell_exchange+'</span><span class="mkt-net '+(s.fill_suspected?'yes':'no')+'">'+(s.fill_suspected?'POSIBLE FILL':Number(s.net_if_filled).toFixed(2)+'% si entra')+'</span></div>'
-      +'<div class="combo">Entrada limite sugerida <b>'+s.entry_price+'</b> (ask fino '+s.ask_vol_usdt+' USDT) - vender en <b>'+s.sell_exchange+' '+s.sell_bid+'</b> - neto estimado <b>'+s.net_if_filled+'%</b></div>'+nxt+'</div>';
+      +'<div class="combo">Entrada limite sugerida <b>'+s.entry_price+'</b> (ask fino '+s.ask_vol_usdt+' USDT) - neto estimado <b>'+s.net_if_filled+'%</b></div>'+'<div class="combo">'+comboTxt+'</div>'+nxt+'</div>';
     }
     const books=j.books||[];
     if(books.length){
