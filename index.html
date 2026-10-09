@@ -21,9 +21,9 @@
             </div>
         </header>
         <div class="watch">
-            <b>🔴 Precio live ahora (<span id="liveTime">—</span>):</b>
+            <b>🔴 Precio live del bot (<span id="liveTime">—</span>):</b>
             <div id="liveBox" style="margin-top:.5rem;font-size:.9rem">cargando...</div>
-            <div class="cfg">Live = APIs públicas Binance/MEXC desde tu navegador. Alertas abajo = histórico del bot (solo si neto ≥0.40%).</div>
+            <div class="cfg">Live = último scan del bot guardado en GitHub (data/live.json). Si dice ⚪ negativo, no hay arb ahora aunque abajo veas histórico.</div>
         </div>
         <div class="watch">
             <b>👁️ Vigilando 15 activos:</b>
@@ -37,10 +37,11 @@
             <div class="stat-card"><div class="stat-label">Top profit</div><div class="stat-value" id="topProfit">—</div></div>
         </div>
         <main class="alerts-section">
-            <div class="section-header"><h2>Oportunidades en vivo</h2><button class="refresh-btn" id="refreshBtn" title="Actualizar">↻</button></div>
+            <div class="section-header"><h2>Oportunidades activas (últimos 15 min)</h2><button class="refresh-btn" id="refreshBtn" title="Actualizar">↻</button></div>
             <div id="alertsContainer" class="alerts-grid"></div>
             <div id="emptyState" class="empty-state" style="display:none"><div class="empty-icon">🔍</div><h3>Sin spread ahora mismo</h3><p>Escaneando...</p></div>
             <div id="errorState" class="error-state" style="display:none"><div class="error-icon">⚠️</div><h3>Sin conexión</h3><p id="errorMessage"></p></div>
+            <div id="historyBox" style="display:none;margin-top:2rem"><h3 style="margin-bottom:1rem">📜 Histórico (no operable)</h3><div id="historyContainer" class="alerts-grid"></div></div>
         </main>
         <footer class="footer"><p>⚠️ Solo detección, no es consejo financiero.</p><p>Neto = (bid vendo − ask compro)/ask×100 − fees · refresh 12s</p></footer>
     </div>
