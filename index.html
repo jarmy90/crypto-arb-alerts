@@ -22,6 +22,18 @@
     .live-table tr.arb td.bs{background:#0ea5e9;color:#fff;font-size:.95rem}
     .live-table td.net{font-weight:800;color:#e5e7eb;font-size:.88rem}
     .live-table td.net.yes{color:#10b981}
+    .mkt{background:#242b3d;border:1px solid #374151;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem}
+    .mkt-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;gap:.5rem}
+    .mkt-sym{font-weight:700}
+    .mkt-net{font-weight:700;font-size:.8rem;padding:.15rem .6rem;border-radius:.5rem;background:#374151;color:#9ca3af}
+    .mkt-net.warn{background:#fbbf24;color:#111}
+    .mkt-net.prep{background:#fb923c;color:#111}
+    .mkt-net.yes{background:#10b981;color:#fff}
+    .mkt-net.bad{background:#ef4444;color:#fff}
+    .mkt-net.no{background:#374151;color:#9ca3af}
+    .combo{font-size:.8rem;color:#9ca3af;margin-top:.35rem}
+    .combo b{color:#e7eaf0}
+    .combo button,.mkt button{background:#3b82f6;color:#fff;border:0;border-radius:.4rem;padding:.3rem .6rem;margin:.15rem .15rem 0 0;cursor:pointer;font-size:.78rem}
     .combo{font-size:.78rem;color:#9ca3af;margin-top:.4rem}
     </style>
 </head>
@@ -43,9 +55,14 @@
             <div id="liveBox" style="margin-top:.75rem">cargando...</div>
         </div>
         <div class="watch">
-            <b>Libro fino - entradas limite (<span id="depthTime">-</span>):</b>
-            <div class="cfg">Si el ASK tiene poco volumen (&lt;1000 USDT) y la entrada al BID deja neto con margen, sale aqui. Si luego el ASK sube sobre tu entrada = POSIBLE FILL, vende rapido en el otro exchange. Solo alertas, nunca auto-trade.</div>
+            <b>Modelos maker: COMPRA EN COLA y VENTA EN COLA (<span id="depthTime">-</span>):</b>
+            <div class="cfg">Una sola pata en cola (LIMIT). La otra sale inmediata (TAKER). Neto = bruto - fee maker - fee taker - slippage salida - margen. Amarillo=OBSERVAR, naranja=PREPARAR, verde=POSIBLE FILL, rojo=RETIRAR. Sin claves: POSIBLE FILL, nunca confirmado.</div>
             <div id="depthBox" style="margin-top:.75rem">cargando...</div>
+        </div>
+        <div class="watch">
+            <b>Mis ordenes manuales (solo este navegador):</b>
+            <div class="cfg">Pulsa HE PUESTO LA ORDEN en una senal. La web vigila si la salida sigue rentable: MANTENER, EJECUTAR o RETIRAR. No ejecuta nada.</div>
+            <div id="ordersBox" style="margin-top:.75rem">cargando...</div>
         </div>
         <div class="watch">
             <b>Vigilando 15 activos:</b>
