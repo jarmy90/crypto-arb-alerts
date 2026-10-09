@@ -36,16 +36,24 @@ function Get-TradeUrl($ex,$sym){
   return "https://www.okx.com/trade-spot/$($base.ToLower())-$($quote.ToLower())"
 }
 $n=0
+$botStarted=[DateTime]::UtcNow
+$script:tickerTs=$null; $script:depthTs=$null; $script:tradesTs=$null
+$script:cycleId="c0"; $script:cycleMs=$null
+$script:exStat=@{BINANCE=@{ok=0;fail=0};MEXC=@{ok=0;fail=0};BYBIT=@{ok=0;fail=0};OKX=@{ok=0;fail=0}}
 do{
-  $n++; Write-Host "`n--- Scan #$n $([DateTime]::UtcNow.ToString('HH:mm:ss')) UTC ---"
+  $n++
+  $script:cycleId="c$($botStarted.ToString('yyyyMMddHHmmss'))-#$n"
+  $script:exStat=@{BINANCE=@{ok=0;fail=0};MEXC=@{ok=0;fail=0};BYBIT=@{ok=0;fail=0};OKX=@{ok=0;fail=0}}
+  $sw=[Diagnostics.Stopwatch]::StartNew()
+  Write-Host "`n--- Ciclo $script:cycleId $([DateTime]::UtcNow.ToString('HH:mm:ss')) UTC ---"
   $live=@()
   foreach($sym in $SYMS){
     if($last.ContainsKey($sym) -and ((Get-Date)-$last[$sym]).TotalSeconds -lt $COOL){continue}
     $s=$sym.Replace("/",""); $oid=$sym.Replace("/","-"); $b=$null; $m=$null; $yB=$null; $yA=$null; $oB=$null; $oA=$null
-    try{$b=Invoke-RestMethod "https://api.binance.com/api/v3/ticker/bookTicker?symbol=$s" -TimeoutSec 10}catch{}
-    try{$m=Invoke-RestMethod "https://api.mexc.com/api/v3/ticker/bookTicker?symbol=$s" -TimeoutSec 10}catch{}
-    try{ $y=Invoke-RestMethod "https://api.bybit.com/v5/market/tickers?category=spot&symbol=$s" -TimeoutSec 10; $t=$y.result.list[0]; $yB=[double]$t.bid1Price; $yA=[double]$t.ask1Price }catch{}
-    try{ $o=Invoke-RestMethod "https://www.okx.com/api/v5/market/ticker?instId=$oid" -TimeoutSec 10; $d=$o.data[0]; $oB=[double]$d.bidPx; $oA=[double]$d.askPx }catch{}
+    try{$b=Invoke-RestMethod "https://api.binance.com/api/v3/ticker/bookTicker?symbol=$s" -TimeoutSec 10; $script:exStat.BINANCE.ok++}catch{$script:exStat.BINANCE.fail++}
+    try{$m=Invoke-RestMethod "https://api.mexc.com/api/v3/ticker/bookTicker?symbol=$s" -TimeoutSec 10; $script:exStat.MEXC.ok++}catch{$script:exStat.MEXC.fail++}
+    try{ $y=Invoke-RestMethod "https://api.bybit.com/v5/market/tickers?category=spot&symbol=$s" -TimeoutSec 10; $t=$y.result.list[0]; $yB=[double]$t.bid1Price; $yA=[double]$t.ask1Price; $script:exStat.BYBIT.ok++ }catch{$script:exStat.BYBIT.fail++}
+    try{ $o=Invoke-RestMethod "https://www.okx.com/api/v5/market/ticker?instId=$oid" -TimeoutSec 10; $d=$o.data[0]; $oB=[double]$d.bidPx; $oA=[double]$d.askPx; $script:exStat.OKX.ok++ }catch{$script:exStat.OKX.fail++}
     if(-not $b -or -not $m -or -not $yB -or $yA -le 0 -or -not $oB -or $oA -le 0){continue}
     $bA=[double]$b.askPrice; $bB=[double]$b.bidPrice; $mA=[double]$m.askPrice; $mB=[double]$m.bidPrice
     if($bA -le 0 -or $mA -le 0){continue}
@@ -64,7 +72,8 @@ do{
     }
   }
   Write-Host "Fin scan #$n. Guardado en data/alerts.json"
-  @{ updated=([DateTime]::UtcNow.ToString("o")); ver=$COMMON_VERSION; symbols=$live } | ConvertTo-Json -Depth 5 | Set-Content "data/live.json" -Encoding UTF8
+  @{ updated=([DateTime]::UtcNow.ToString("o")); ver=$COMMON_VERSION; ticker_updated_at=([DateTime]::UtcNow.ToString("o")); cycle_id=$script:cycleId; bot_heartbeat_at=([DateTime]::UtcNow.ToString("o")); symbols=$live } | ConvertTo-Json -Depth 5 | Set-Content "data/live.json" -Encoding UTF8
+  $script:tickerTs=([DateTime]::UtcNow.ToString("o"))
   if(((Get-Date)-$lastDepth).TotalSeconds -ge $DINT){
     $lastDepth=Get-Date; $depth=@(); $books=@()
     $cfg=@{MIN=$MIN; SIZE=$SIZE; THIN=$THIN; SAFE=$SAFE; EXITMIN=$EXITMIN; PERSIST=$PERSIST; MF=@{BINANCE=$MFB;MEXC=$MFM;BYBIT=$MFY;OKX=$MFO}; TF=@{BINANCE=$FB;MEXC=$FM;BYBIT=$FY;OKX=$FO}}
@@ -84,9 +93,15 @@ do{
         elseif($sig.state -eq "PREPARAR"){ Write-Host "  PREPARAR $sym $($sig.type) $($sig.maker_exchange) @ $($sig.limit_price) -> $($sig.exit_exchange) $($sig.exit_price) neto $($sig.net)% fill~$($sig.est_fill_s)s" -ForegroundColor Cyan }
       }
     }
-    @{ updated=([DateTime]::UtcNow.ToString("o")); ver=$COMMON_VERSION; thin_usdt=$THIN; safety=$SAFE; persist_reads=$PERSIST; trade_usdt=$SIZE; trades_feeds="$trO/$trN"; signals=$depth; books=$books } | ConvertTo-Json -Depth 9 | Set-Content "data/depth.json" -Encoding UTF8
+    @{ updated=([DateTime]::UtcNow.ToString("o")); ver=$COMMON_VERSION; depth_updated_at=([DateTime]::UtcNow.ToString("o")); cycle_id=$script:cycleId; bot_heartbeat_at=([DateTime]::UtcNow.ToString("o")); thin_usdt=$THIN; safety=$SAFE; persist_reads=$PERSIST; trade_usdt=$SIZE; trades_feeds="$trO/$trN"; signals=$depth; books=$books } | ConvertTo-Json -Depth 9 | Set-Content "data/depth.json" -Encoding UTF8
+    $script:depthTs=([DateTime]::UtcNow.ToString("o"))
+    try{ $tp=Invoke-RestMethod "https://api.binance.com/api/v3/trades?symbol=BTCUSDT&limit=1" -TimeoutSec 10; if($tp){ $script:tradesTs=([DateTime]::UtcNow.ToString("o")) } }catch{}
     Write-Host "Depth guardado ($($depth.Count) senales, trades $trO/$trN)"
   }
+  $sw.Stop(); $script:cycleMs=$sw.ElapsedMilliseconds
+  [ordered]@{ver=$COMMON_VERSION; mode="local"; bot_started_at=$botStarted.ToString("o"); bot_heartbeat_at=([DateTime]::UtcNow.ToString("o")); ticker_updated_at=$script:tickerTs; depth_updated_at=$script:depthTs; trades_updated_at=$script:tradesTs; cycle_id=$script:cycleId; cycle_duration_ms=$script:cycleMs; bot_status="RUNNING"; timestamp=([DateTime]::UtcNow.ToString("o"))} | ConvertTo-Json -Depth 5 | Set-Content "data/status.json" -Encoding UTF8
+  $eok=($script:exStat.GetEnumerator() | ForEach-Object { "$($_.Key):$($_.Value.ok)ok/$($_.Value.fail)fail" }) -join " "
+  Write-Host "Fin ciclo $($script:cycleId) en $($script:cycleMs) ms UTC $([DateTime]::UtcNow.ToString('HH:mm:ss')) | $eok"
   if($Once){break}
   Start-Sleep -Seconds $WAIT
 }while($true)
