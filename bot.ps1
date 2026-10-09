@@ -82,17 +82,47 @@ function Push-Alert($alert) {
   } catch { Write-Host "  GitHub push error: $($_.Exception.Message)" -ForegroundColor Red; return $false }
 }
 
+function Write-Status($phase){
+  $st=[ordered]@{ver=$COMMON_VERSION; mode=$(if($Once){"once"}else{"continuous"}); bot_started_at=$botStarted.ToString("o"); bot_heartbeat_at=([DateTime]::UtcNow.ToString("o")); ticker_updated_at=$script:tickerTs; depth_updated_at=$script:depthTs; trades_updated_at=$script:tradesTs; cycle_id=$script:cycleId; cycle_duration_ms=$script:cycleMs; bot_status="RUNNING"; phase=$phase; exchanges=$script:exStat; timestamp=([DateTime]::UtcNow.ToString("o"))}
+  $st | ConvertTo-Json -Depth 5 | Set-Content "data/status.json" -Encoding UTF8
+  if(-not $Once){
+    try {
+      $sj=Get-Content "data/status.json" -Raw -Encoding UTF8
+      $sb64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($sj))
+      $surl="https://api.github.com/repos/$REPO/contents/data/status.json"
+      $ssha=$null; try{ $ssha=(Invoke-RestMethod -Uri "$surl`?ref=main" -Headers $H -TimeoutSec 10).sha }catch{}
+      $sbody=@{ message="Heartbeat $script:cycleId - $([DateTime]::UtcNow.ToString('yyyy-MM-dd HH:mm:ss')) UTC"; content=$sb64; branch="main" }
+      if($ssha){ $sbody.sha=$ssha }
+      Invoke-RestMethod -Uri $surl -Method Put -Headers $H -Body ($sbody|ConvertTo-Json -Depth 5) -ContentType "application/json" -TimeoutSec 15 | Out-Null
+    } catch { Write-Host "  Status push error: $($_.Exception.Message)" -ForegroundColor Yellow }
+  }
+}
+
 Write-Host "============================================================"
-Write-Host "ARBITRAGE BOT (PowerShell) - Repo: $REPO - Min: $MIN% - Cada ${WAIT}s"
+Write-Host "ARBITRAGE BOT (PowerShell) v$COMMON_VERSION - Repo: $REPO - Min: $MIN% - Cada ${WAIT}s"
+Write-Host "Modo: $(if($Once){'UNA VEZ (-Once, pruebas)'}else{'CONTINUO: deja este proceso corriendo; Ctrl+C para parar'})"
 Write-Host "============================================================"
+$botStarted=[DateTime]::UtcNow
+$script:tickerTs=$null; $script:depthTs=$null; $script:tradesTs=$null
+$script:cycleId="c0"; $script:cycleMs=$null
+$script:exStat=@{BINANCE=@{ok=0;fail=0};MEXC=@{ok=0;fail=0};BYBIT=@{ok=0;fail=0};OKX=@{ok=0;fail=0}}
 $n = 0
 do {
   $n++
+  $script:cycleId="c$($botStarted.ToString('yyyyMMddHHmmss'))-#$n"
+  $script:exStat=@{BINANCE=@{ok=0;fail=0};MEXC=@{ok=0;fail=0};BYBIT=@{ok=0;fail=0};OKX=@{ok=0;fail=0}}
+  $sw=[Diagnostics.Stopwatch]::StartNew()
   Write-Host ""
-  Write-Host "--- Scan #$n $([DateTime]::UtcNow.ToString('HH:mm:ss')) UTC ---"
+  Write-Host "--- Ciclo $script:cycleId $([DateTime]::UtcNow.ToString('HH:mm:ss')) UTC ---"
+  Write-Status "cycle-start"
+  try {
   $live=@()
   foreach ($sym in $SYMS) {
     $p = Get-Prices $sym
+    if($p.B){ $script:exStat.BINANCE.ok++ } else { $script:exStat.BINANCE.fail++ }
+    if($p.M){ $script:exStat.MEXC.ok++ } else { $script:exStat.MEXC.fail++ }
+    if($p.YB -and $p.YA){ $script:exStat.BYBIT.ok++ } else { $script:exStat.BYBIT.fail++ }
+    if($p.OB -and $p.OA){ $script:exStat.OKX.ok++ } else { $script:exStat.OKX.fail++ }
     if (-not $p.B -or -not $p.M) { continue }
     $bAsk=[double]$p.B.askPrice; $bBid=[double]$p.B.bidPrice
     $mAsk=[double]$p.M.askPrice; $mBid=[double]$p.M.bidPrice
@@ -120,8 +150,10 @@ do {
       if (Push-Alert $alert) { Write-Host "  Publicado en GitHub" -ForegroundColor Cyan; $lastAlert[$sym]=Get-Date } else { Write-Host "  Fallo al publicar" -ForegroundColor Red }
     }
   }
-  $liveObj = @{ updated=([DateTime]::UtcNow.ToString("o")); ver=$COMMON_VERSION; symbols=$live }
+  $liveObj = @{ updated=([DateTime]::UtcNow.ToString("o")); ver=$COMMON_VERSION; ticker_updated_at=([DateTime]::UtcNow.ToString("o")); cycle_id=$script:cycleId; bot_heartbeat_at=([DateTime]::UtcNow.ToString("o")); symbols=$live }
   $liveObj | ConvertTo-Json -Depth 5 | Set-Content "data/live.json" -Encoding UTF8
+  $script:tickerTs=$liveObj.ticker_updated_at
+  Write-Status "ticker-done"
   try {
     $lj = Get-Content "data/live.json" -Raw -Encoding UTF8
     $lb64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($lj))
@@ -151,11 +183,30 @@ do {
         elseif($sig.state -eq "PREPARAR"){ Write-Host "  PREPARAR $sym $($sig.type) $($sig.maker_exchange) @ $($sig.limit_price) -> $($sig.exit_exchange) $($sig.exit_price) neto $($sig.net)% fill~$($sig.est_fill_s)s" -ForegroundColor Cyan }
       }
     }
-    @{ updated=([DateTime]::UtcNow.ToString("o")); ver=$COMMON_VERSION; thin_usdt=$THIN; safety=$SAFE; persist_reads=$PERSIST; trade_usdt=$SIZE; trades_feeds="$trO/$trN"; signals=$depth; books=$books } | ConvertTo-Json -Depth 9 | Set-Content "data/depth.json" -Encoding UTF8
+    @{ updated=([DateTime]::UtcNow.ToString("o")); ver=$COMMON_VERSION; depth_updated_at=([DateTime]::UtcNow.ToString("o")); cycle_id=$script:cycleId; bot_heartbeat_at=([DateTime]::UtcNow.ToString("o")); thin_usdt=$THIN; safety=$SAFE; persist_reads=$PERSIST; trade_usdt=$SIZE; trades_feeds="$trO/$trN"; signals=$depth; books=$books } | ConvertTo-Json -Depth 9 | Set-Content "data/depth.json" -Encoding UTF8
+    $script:depthTs=([DateTime]::UtcNow.ToString("o"))
+    try{
+      $tp=Invoke-RestMethod "https://api.binance.com/api/v3/trades?symbol=BTCUSDT&limit=1" -TimeoutSec 10
+      if($tp){ $script:tradesTs=([DateTime]::UtcNow.ToString("o")) }
+    }catch{}
     Write-Host "Depth publicado ($($depth.Count) senales, trades $trO/$trN)"
+    try {
+      $dj=Get-Content "data/depth.json" -Raw -Encoding UTF8
+      $db64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($dj))
+      $durl="https://api.github.com/repos/$REPO/contents/data/depth.json"
+      $dsha=$null; try{ $dsha=(Invoke-RestMethod -Uri "$durl`?ref=main" -Headers $H -TimeoutSec 10).sha }catch{}
+      $dbody=@{ message="Update depth - $([DateTime]::UtcNow.ToString('yyyy-MM-dd HH:mm:ss')) UTC"; content=$db64; branch="main" }
+      if($dsha){ $dbody.sha=$dsha }
+      Invoke-RestMethod -Uri $durl -Method Put -Headers $H -Body ($dbody|ConvertTo-Json -Depth 5) -ContentType "application/json" -TimeoutSec 30 | Out-Null
     } catch { Write-Host "  Depth push error: $($_.Exception.Message)" -ForegroundColor Yellow }
   }
-  Write-Host "Fin scan #$n. Proximo en ${WAIT}s..."
+  } catch { Write-Host "  ERROR en ciclo $($script:cycleId): $($_.Exception.Message) - continuo..." -ForegroundColor Red }
+  $sw.Stop()
+  $script:cycleMs=$sw.ElapsedMilliseconds
+  Write-Status "cycle-end"
+  $eok=($script:exStat.GetEnumerator() | ForEach-Object { "$($_.Key):$($_.Value.ok)ok/$($_.Value.fail)fail" }) -join " "
+  Write-Host "Fin ciclo $($script:cycleId) en $($script:cycleMs) ms UTC $([DateTime]::UtcNow.ToString('HH:mm:ss')) | $eok"
   if ($Once) { break }
+  Write-Host "Siguiente ciclo en ${WAIT}s (bot activo; Ctrl+C para parar)..."
   Start-Sleep -Seconds $WAIT
 } while ($true)
