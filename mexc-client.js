@@ -3,8 +3,25 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-// Cargar variables de entorno
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+// Cargar variables de entorno sin dependencias externas
+try {
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+        const envLines = fs.readFileSync(envPath, 'utf8').split('\n');
+        for (const line of envLines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) continue;
+            const idx = trimmed.indexOf('=');
+            if (idx > 0) {
+                const k = trimmed.slice(0, idx).trim();
+                const v = trimmed.slice(idx + 1).trim();
+                process.env[k] = v;
+            }
+        }
+    }
+} catch (e) {
+    console.error('Error cargando .env:', e.message);
+}
 
 const API_KEY = process.env.MEXC_API_KEY;
 const SECRET_KEY = process.env.MEXC_SECRET_KEY;
