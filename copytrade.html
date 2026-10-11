@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invo → MEXC CopyTrader | Dashboard en Vivo</title>
+    <style>
+        :root {
+            --bg-color: #0b0e14;
+            --card-bg: #151a24;
+            --border-color: #262e3d;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-blue: #3b82f6;
+            --accent-yellow: #f59e0b;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+
+        .title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .badge-live {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: var(--accent-green);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.2); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .card-label {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            margin-bottom: 6px;
+        }
+
+        .card-val {
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            margin: 25px 0 15px 0;
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+        }
+
+        th {
+            background-color: rgba(255, 255, 255, 0.03);
+            color: var(--text-muted);
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .tag-long {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: var(--accent-green);
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.75rem;
+        }
+
+        .tag-short {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: var(--accent-red);
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.75rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        footer {
+            margin-top: 40px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            border-top: 1px solid var(--border-color);
+            padding-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="title">
+                ⚡ Invo → MEXC CopyTrader
+                <span class="badge-live"><span class="pulse-dot"></span> EN VIVO</span>
+            </div>
+            <div style="color: var(--text-muted); font-size: 0.85rem;" id="lastUpdate">
+                Sincronizando...
+            </div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="card">
+                <div class="card-label">Saldo Total Estimado</div>
+                <div class="card-val" style="color: var(--accent-green);">~$352.78 USDT</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Regla de Margen por Trade</div>
+                <div class="card-val">5.0% (~$15 USDT)</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Posiciones Activas</div>
+                <div class="card-val" id="activeCount" style="color: var(--accent-blue);">1 / 5</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Regla TP / SL por Defecto</div>
+                <div class="card-val" style="font-size: 1.1rem; padding-top: 4px;">TP +10% | SL -5%</div>
+            </div>
+        </div>
+
+        <div class="section-title">📊 Posiciones Replicadas Activas</div>
+        <div class="card" style="padding: 0; overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Trader</th>
+                        <th>Símbolo</th>
+                        <th>Lado</th>
+                        <th>Apalancamiento</th>
+                        <th>Precio Entrada</th>
+                        <th>Take Profit</th>
+                        <th>Stop Loss</th>
+                        <th>Fecha Apertura</th>
+                    </tr>
+                </thead>
+                <tbody id="positionsTable">
+                    <tr>
+                        <td><strong>@henderson_14</strong></td>
+                        <td><strong>GRASS_USDT</strong></td>
+                        <td><span class="tag-long">LONG</span></td>
+                        <td>3X</td>
+                        <td>0.8086 USDT</td>
+                        <td style="color: var(--accent-green);">0.8328 USDT (+3%)</td>
+                        <td style="color: var(--accent-red);">0.7844 USDT (-3%)</td>
+                        <td>Hace unos minutos (Prueba)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section-title">🕒 Últimas Notificaciones y Actividad</div>
+        <div class="card" style="padding: 0; overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Hora</th>
+                        <th>Trader</th>
+                        <th>Evento</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody id="logsTable">
+                    <tr>
+                        <td>Hace 15m</td>
+                        <td>@henderson_14</td>
+                        <td>Nueva Posición</td>
+                        <td>Detectado en Invo Notifications: GRASS LONG 3X</td>
+                    </tr>
+                    <tr>
+                        <td>Hace 14m</td>
+                        <td>Sistema</td>
+                        <td>Orden MEXC Ejecutada</td>
+                        <td>Apertura 7 contratos GRASS_USDT con TP y SL colocados</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <footer>
+            Invo to MEXC Copy Trading Engine · Actualizado en tiempo real desde tu entorno
+        </footer>
+    </div>
+
+    <script>
+        async function updateDashboard() {
+            try {
+                const res = await fetch('data/copytrade_log.json?t=' + Date.now());
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('lastUpdate').textContent = 'Última lectura: ' + new Date(data.lastUpdated).toLocaleTimeString();
+                    document.getElementById('activeCount').textContent = `${data.activePositionsCount || 0} / 5`;
+                }
+            } catch (e) {
+                // Modo local autónomo
+            }
+        }
+        setInterval(updateDashboard, 15000);
+        updateDashboard();
+    </script>
+</body>
+</html>
