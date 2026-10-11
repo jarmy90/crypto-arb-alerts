@@ -127,34 +127,39 @@ async function executeCopyTrade(tradeSignal) {
     const orderId = orderRes.data;
     console.log(`[ORDEN EJECUTADA] MEXC Order ID: ${orderId}`);
 
-    // 7. Calcular Take Profit: Objetivo de GANAR AL MENOS $10 DÓLARES (o el TP del trader si existe)
+    // 7. Calcular Take Profit y Stop Loss de forma INDEPENDIENTE
     const priceScale = contract.priceScale || 4;
+    const totalCoins = vol * contractSize;
     let tpPrice = 0;
     let slPrice = 0;
 
-    if (tradeSignal.takeProfit && tradeSignal.stopLoss) {
-        // Usar los valores del trader si los tiene
+    // A) Take Profit: Si el autor lo pone, usamos su TP exacto. Si no, calculamos para ganar al menos +$10 USDT
+    if (tradeSignal.takeProfit && tradeSignal.takeProfit > 0) {
         tpPrice = parseFloat(tradeSignal.takeProfit.toFixed(priceScale));
-        slPrice = parseFloat(tradeSignal.stopLoss.toFixed(priceScale));
+        console.log(`[TP DETECTADO DEL AUTOR] Usando TP fijado por el trader: ${tpPrice}`);
     } else {
-        // Objetivo: Ganar al menos +10.0 USDT en este trade
-        // deltaPrecio = 10 / (vol * contractSize)
-        const totalCoins = vol * contractSize;
         const deltaProfitPerCoin = 10.0 / totalCoins;
-        
-        // Stop Loss protector: limitado a max ~2.5 USDT de pérdida (ratio 4:1 a favor)
-        const deltaLossPerCoin = 2.5 / totalCoins;
-
-        if (isLong) {
-            tpPrice = parseFloat((currentPrice + deltaProfitPerCoin).toFixed(priceScale));
-            slPrice = parseFloat((currentPrice - deltaLossPerCoin).toFixed(priceScale));
-        } else {
-            tpPrice = parseFloat((currentPrice - deltaProfitPerCoin).toFixed(priceScale));
-            slPrice = parseFloat((currentPrice + deltaLossPerCoin).toFixed(priceScale));
-        }
+        tpPrice = isLong 
+            ? parseFloat((currentPrice + deltaProfitPerCoin).toFixed(priceScale))
+            : parseFloat((currentPrice - deltaProfitPerCoin).toFixed(priceScale));
+        console.log(`[TP CALCULADO AUTOMÁTICO] Objetivo +$10 USDT: ${tpPrice}`);
     }
 
-    console.log(`[OBJETIVO +$10 BENEFICIO] TP Fijado: ${tpPrice} | SL Protector: ${slPrice}`);
+    // B) Stop Loss: Si el autor lo pone, usamos su SL exacto. Si NO lo pone (caso muy común),
+    // aplicamos SL Protector cortando la pérdida máxima en solo ~$2.50 USDT (ratio mínimo 4:1)
+    if (tradeSignal.stopLoss && tradeSignal.stopLoss > 0) {
+        slPrice = parseFloat(tradeSignal.stopLoss.toFixed(priceScale));
+        console.log(`[SL DETECTADO DEL AUTOR] Usando SL fijado por el trader: ${slPrice}`);
+    } else {
+        // Pérdida máxima tolerada: ~$2.50 USDT (menos del 1% del bank)
+        const deltaLossPerCoin = 2.5 / totalCoins;
+        slPrice = isLong
+            ? parseFloat((currentPrice - deltaLossPerCoin).toFixed(priceScale))
+            : parseFloat((currentPrice + deltaLossPerCoin).toFixed(priceScale));
+        console.log(`[SL PROTECTOR AUTOMÁTICO] Autor sin SL -> SL fijado para limitar pérdida a -$2.50 USDT: ${slPrice}`);
+    }
+
+    console.log(`[ÓRDENES DE SALIDA CONFIRMADAS] TP: ${tpPrice} | SL: ${slPrice}`);
 
     // 8. Colocar órdenes de protección en MEXC
     let tpOrderId = null;
