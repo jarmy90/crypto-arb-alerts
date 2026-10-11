@@ -94,10 +94,10 @@ async function executeCopyTrade(tradeSignal) {
     const isLong = tradeSignal.direction.toUpperCase() === 'LONG';
     const leverage = Math.min(tradeSignal.leverage || 3, 10); // Máximo 10x por seguridad
 
-    // 4. Calcular margen y volumen según norma fijada (5% de $350 = ~$15 USDT)
+    // 4. Calcular margen: Objetivo de $30 USDT por operación (aprox 8.5% del bank)
     const asset = await mexc.getAccountAssets();
     const availableBalance = asset ? parseFloat(asset.availableBalance) : 75;
-    const targetMargin = Math.min(15.0, availableBalance * 0.20); // ~$15 USDT
+    const targetMargin = Math.min(30.0, availableBalance * 0.40); // ~$30 USDT por trade
 
     if (targetMargin < 2.0) {
         console.log(`[ERROR] Saldo disponible insuficiente para abrir posición (Disponible: ${availableBalance} USDT).`);
@@ -127,7 +127,7 @@ async function executeCopyTrade(tradeSignal) {
     const orderId = orderRes.data;
     console.log(`[ORDEN EJECUTADA] MEXC Order ID: ${orderId}`);
 
-    // 7. Calcular Take Profit (+10% ROE) y Stop Loss (-5% ROE) según la norma
+    // 7. Calcular Take Profit: Objetivo de GANAR AL MENOS $10 DÓLARES (o el TP del trader si existe)
     const priceScale = contract.priceScale || 4;
     let tpPrice = 0;
     let slPrice = 0;
@@ -137,20 +137,24 @@ async function executeCopyTrade(tradeSignal) {
         tpPrice = parseFloat(tradeSignal.takeProfit.toFixed(priceScale));
         slPrice = parseFloat(tradeSignal.stopLoss.toFixed(priceScale));
     } else {
-        // Regla por defecto: 10% ROE / leverage = % de variación del precio
-        const deltaTpPercent = (0.10 / leverage);
-        const deltaSlPercent = (0.05 / leverage);
+        // Objetivo: Ganar al menos +10.0 USDT en este trade
+        // deltaPrecio = 10 / (vol * contractSize)
+        const totalCoins = vol * contractSize;
+        const deltaProfitPerCoin = 10.0 / totalCoins;
+        
+        // Stop Loss protector: limitado a max ~2.5 USDT de pérdida (ratio 4:1 a favor)
+        const deltaLossPerCoin = 2.5 / totalCoins;
 
         if (isLong) {
-            tpPrice = parseFloat((currentPrice * (1 + deltaTpPercent)).toFixed(priceScale));
-            slPrice = parseFloat((currentPrice * (1 - deltaSlPercent)).toFixed(priceScale));
+            tpPrice = parseFloat((currentPrice + deltaProfitPerCoin).toFixed(priceScale));
+            slPrice = parseFloat((currentPrice - deltaLossPerCoin).toFixed(priceScale));
         } else {
-            tpPrice = parseFloat((currentPrice * (1 - deltaTpPercent)).toFixed(priceScale));
-            slPrice = parseFloat((currentPrice * (1 + deltaSlPercent)).toFixed(priceScale));
+            tpPrice = parseFloat((currentPrice - deltaProfitPerCoin).toFixed(priceScale));
+            slPrice = parseFloat((currentPrice + deltaLossPerCoin).toFixed(priceScale));
         }
     }
 
-    console.log(`[PROTECCIONES FIJADAS] TP: ${tpPrice} | SL: ${slPrice}`);
+    console.log(`[OBJETIVO +$10 BENEFICIO] TP Fijado: ${tpPrice} | SL Protector: ${slPrice}`);
 
     // 8. Colocar órdenes de protección en MEXC
     let tpOrderId = null;
